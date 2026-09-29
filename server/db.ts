@@ -248,8 +248,8 @@ export async function initDb() {
   }
 
   // Ensure default nda_notice and nda_url exist in dashboard_settings
-  const defaultNdaNotice = `<h2>Mutual Non-Disclosure Agreement (NDA)</h2>
-<p>This Mutual Non-Disclosure Agreement ("Agreement") governs the disclosure of confidential, proprietary, security, and compliance documentation by <strong>Björn Lunden AB</strong> and its affiliates ("Disclosing Party") to the requesting organization and its representatives ("Receiving Party").</p>
+  const defaultNdaNotice = `<h2>Non-Disclosure Agreement (NDA)</h2>
+<p>This Non-Disclosure Agreement ("Agreement") governs the disclosure of confidential, proprietary, security, and compliance documentation by <strong>Björn Lunden AB</strong> and its affiliates ("Disclosing Party") to the requesting organization and its representatives ("Receiving Party").</p>
 <h3>1. Purpose</h3>
 <p>The Receiving Party has requested access to confidential documentation, including but not limited to third-party audit reports (such as ISAE 3402, SOC 2, ISO 27001), penetration testing summaries, data protection impact assessments (DPIAs), architectural specifications, and internal security policies via the Björn Lunden Trust Center ("Purpose").</p>
 <h3>2. Confidential Information</h3>
@@ -277,8 +277,8 @@ export async function initDb() {
   // Ensure default nda_versions exist for history tracking
   const ndaVersionsCount = await getCount('nda_versions');
   if (ndaVersionsCount.count === 0) {
-    const v1_0_0_Content = `<h2>Mutual Non-Disclosure Agreement (NDA)</h2>
-<p>This Mutual Non-Disclosure Agreement ("Agreement") governs the disclosure of confidential, proprietary, security, and compliance documentation by <strong>Björn Lunden AB</strong> and its affiliates ("Disclosing Party") to the requesting organization and its representatives ("Receiving Party").</p>
+    const v1_0_0_Content = `<h2>Non-Disclosure Agreement (NDA)</h2>
+<p>This Non-Disclosure Agreement ("Agreement") governs the disclosure of confidential, proprietary, security, and compliance documentation by <strong>Björn Lunden AB</strong> and its affiliates ("Disclosing Party") to the requesting organization and its representatives ("Receiving Party").</p>
 <h3>1. Purpose</h3>
 <p>The Receiving Party has requested access to confidential documentation, including but not limited to third-party audit reports (such as ISAE 3402, SOC 2, ISO 27001), penetration testing summaries, and internal security policies via the Björn Lunden Trust Center ("Purpose").</p>
 <h3>2. Confidential Information</h3>
@@ -300,7 +300,7 @@ export async function initDb() {
     await runDual(`
       INSERT INTO nda_versions (version, content, nda_url, change_summary, created_by, effective_date, is_current, created_at)
       VALUES (?, ?, ?, ?, ?, ?, 0, '2024-01-15 10:00:00')
-    `, ['1.0.0', v1_0_0_Content, '', 'Initial publication of Mutual Non-Disclosure Agreement for Trust Center document access requests.', 'security@bjornlunden.com', '2024-01-15']);
+    `, ['1.0.0', v1_0_0_Content, '', 'Initial publication of Non-Disclosure Agreement for Trust Center document access requests.', 'security@bjornlunden.com', '2024-01-15']);
 
     // Insert active v1.1.0
     await runDual(`
@@ -308,6 +308,19 @@ export async function initDb() {
       VALUES (?, ?, ?, ?, ?, ?, 1, '2025-01-01 09:00:00')
     `, ['1.1.0', defaultNdaNotice, '', 'Added Section 4 on Electronic Watermarking & Recipient Traceability; extended duration to 3 years.', 'security@bjornlunden.com', '2025-01-01']);
   }
+
+  // Update any existing records in dashboard_settings and nda_versions that refer to Mutual Non-Disclosure Agreement
+  await runDual(`
+    UPDATE dashboard_settings 
+    SET "value" = REPLACE("value", 'Mutual Non-Disclosure Agreement', 'Non-Disclosure Agreement')
+    WHERE "key" = 'nda_notice' AND "value" LIKE '%Mutual Non-Disclosure Agreement%'
+  `);
+  await runDual(`
+    UPDATE nda_versions 
+    SET content = REPLACE(content, 'Mutual Non-Disclosure Agreement', 'Non-Disclosure Agreement'),
+        change_summary = REPLACE(change_summary, 'Mutual Non-Disclosure Agreement', 'Non-Disclosure Agreement')
+    WHERE content LIKE '%Mutual Non-Disclosure Agreement%' OR change_summary LIKE '%Mutual Non-Disclosure Agreement%'
+  `);
 
   // Ensure standard pages are public
   const standardPages = ['dashboard', 'security-overview', 'dpa', 'subprocessors', 'policies', 'certifications', 'controls', 'legal'];
@@ -525,14 +538,22 @@ export async function initDb() {
   try { await runDual('ALTER TABLE product_subprocessors ADD COLUMN lei_number TEXT'); } catch (err) { }
   try { await runDual('ALTER TABLE product_subprocessors ADD COLUMN dpa_url TEXT'); } catch (err) { }
   try { await runDual('ALTER TABLE product_subprocessors ADD COLUMN dpa_requestable INTEGER DEFAULT 0'); } catch (err) { }
+  try { await runDual('ALTER TABLE product_subprocessors ADD COLUMN recipients TEXT'); } catch (err) { }
+  try { await runDual('ALTER TABLE product_subprocessors ADD COLUMN transfers TEXT'); } catch (err) { }
+  try { await runDual('ALTER TABLE product_subprocessors ADD COLUMN retention TEXT'); } catch (err) { }
+  try { await runDual('ALTER TABLE product_subprocessors ADD COLUMN security_measures TEXT'); } catch (err) { }
 
   try { await runDual('ALTER TABLE product_policies ADD COLUMN is_requestable INTEGER DEFAULT 1'); } catch (err) { }
   try { await runDual('ALTER TABLE product_policies ADD COLUMN effective_date VARCHAR(255)'); } catch (err) { }
   try { await runDual('ALTER TABLE product_policies ADD COLUMN version VARCHAR(50)'); } catch (err) { }
+  try { await runDual('ALTER TABLE product_policies ADD COLUMN file_url TEXT'); } catch (err) { }
 
   try { await runDual('ALTER TABLE product_legal_documents ADD COLUMN file_url TEXT'); } catch (err) { }
 
   try { await runDual('ALTER TABLE metrics_events ADD COLUMN user_email VARCHAR(255)'); } catch (err) { }
+
+  try { await runDual('ALTER TABLE access_requests ADD COLUMN document_file_url TEXT'); } catch (err) { }
+  try { await runDual('ALTER TABLE access_requests ADD COLUMN watermarked_file_url TEXT'); } catch (err) { }
 
   // Subprocessor History table
   await runDual(`
@@ -687,4 +708,210 @@ export async function initDb() {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
+
+  // Activity logs table for audit tracking
+  await runDual(`
+    CREATE TABLE IF NOT EXISTS activity_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      type VARCHAR(50) NOT NULL,
+      action VARCHAR(50) NOT NULL,
+      title TEXT NOT NULL,
+      actor VARCHAR(255),
+      target_type VARCHAR(50),
+      target_name VARCHAR(255),
+      details TEXT,
+      ip_address VARCHAR(100),
+      status VARCHAR(50) DEFAULT 'success',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Access requests table for document request governance
+  await runDual(`
+    CREATE TABLE IF NOT EXISTS access_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      document_name VARCHAR(255) NOT NULL,
+      document_type VARCHAR(100),
+      product_slug VARCHAR(255),
+      requester_name VARCHAR(255) NOT NULL,
+      business_email VARCHAR(255) NOT NULL,
+      company VARCHAR(255) NOT NULL,
+      job_title VARCHAR(255),
+      relationship VARCHAR(100),
+      purpose TEXT,
+      comments TEXT,
+      nda_accepted INTEGER DEFAULT 1,
+      nda_accepted_at VARCHAR(100),
+      status VARCHAR(50) DEFAULT 'pending',
+      ip_address VARCHAR(100),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Seed initial activity logs if none exist
+  const activityCount = await getCount('activity_logs');
+  if (activityCount.count === 0) {
+    const sampleLogs = [
+      {
+        type: 'user_login',
+        action: 'login_success',
+        title: "User 'admin' logged in successfully",
+        actor: 'admin',
+        target_type: 'user',
+        target_name: 'admin',
+        details: JSON.stringify({ role: 'admin', method: 'password', mfa: false }),
+        ip_address: '192.168.1.102',
+        status: 'success',
+        created_at: '2026-09-27 18:42:10'
+      },
+      {
+        type: 'document_update',
+        action: 'update',
+        title: "Updated compliance document 'ISAE 3402 Type II Audit Report'",
+        actor: 'admin',
+        target_type: 'document',
+        target_name: 'ISAE 3402 Type II Report',
+        details: JSON.stringify({ version: '2025.1', period: 'Jan 2025 - Dec 2025', auditor: 'PwC Sweden' }),
+        ip_address: '192.168.1.102',
+        status: 'success',
+        created_at: '2026-09-27 16:15:32'
+      },
+      {
+        type: 'access_request',
+        action: 'request_submitted',
+        title: "Access requested for 'ISAE 3402 Type II Audit Report' by Henrik Larsson (Nordic Logistics AB)",
+        actor: 'henrik.larsson@nordiclogistics.se',
+        target_type: 'document',
+        target_name: 'ISAE 3402 Type II Audit Report',
+        details: JSON.stringify({
+          requester: 'Henrik Larsson',
+          company: 'Nordic Logistics AB',
+          role: 'Chief Information Security Officer',
+          relationship: 'Customer',
+          nda_accepted: true,
+          nda_accepted_at: '2026-09-27T14:22:00Z',
+          purpose: 'Annual vendor due diligence and compliance assessment for SaaS integration.'
+        }),
+        ip_address: '194.237.112.5',
+        status: 'pending',
+        created_at: '2026-09-27 14:22:15'
+      },
+      {
+        type: 'document_update',
+        action: 'update',
+        title: "Published Non-Disclosure Agreement (NDA) v1.1.0",
+        actor: 'admin',
+        target_type: 'nda',
+        target_name: 'Non-Disclosure Agreement (NDA) v1.1.0',
+        details: JSON.stringify({ version: '1.1.0', change: 'Section 4 Watermarking added; title standardized' }),
+        ip_address: '192.168.1.102',
+        status: 'success',
+        created_at: '2026-09-26 11:30:00'
+      },
+      {
+        type: 'document_update',
+        action: 'create',
+        title: "Added policy 'Information Security Policy' to bl-administration",
+        actor: 'admin',
+        target_type: 'policy',
+        target_name: 'Information Security Policy',
+        details: JSON.stringify({ version: '2.4.0', effective_date: '2025-01-01', product: 'bl-administration' }),
+        ip_address: '192.168.1.102',
+        status: 'success',
+        created_at: '2026-09-25 09:12:44'
+      },
+      {
+        type: 'access_request',
+        action: 'request_submitted',
+        title: "Access requested for 'DPIA – BL Platforms' by Sophia Lindqvist (FinTech Solutions Sweden)",
+        actor: 'sophia.l@fintechsolutions.se',
+        target_type: 'document',
+        target_name: 'DPIA – BL Platforms',
+        details: JSON.stringify({
+          requester: 'Sophia Lindqvist',
+          company: 'FinTech Solutions Sweden',
+          role: 'Head of Legal & Compliance',
+          relationship: 'Prospective Customer',
+          nda_accepted: true,
+          nda_accepted_at: '2026-09-24T10:05:00Z',
+          purpose: 'Pre-contractual GDPR compliance review and data transfer validation.'
+        }),
+        ip_address: '83.254.18.90',
+        status: 'pending',
+        created_at: '2026-09-24 10:05:22'
+      },
+      {
+        type: 'user_login',
+        action: 'login_failed',
+        title: "Failed login attempt for username 'unknown_auditor'",
+        actor: 'unknown_auditor',
+        target_type: 'user',
+        target_name: 'unknown_auditor',
+        details: JSON.stringify({ reason: 'Invalid credentials', attemptCount: 1 }),
+        ip_address: '198.51.100.24',
+        status: 'failed',
+        created_at: '2026-09-23 21:04:12'
+      },
+      {
+        type: 'user_login',
+        action: 'login_success',
+        title: "User 'admin' logged in successfully",
+        actor: 'admin',
+        target_type: 'user',
+        target_name: 'admin',
+        details: JSON.stringify({ role: 'admin', method: 'password' }),
+        ip_address: '192.168.1.102',
+        status: 'success',
+        created_at: '2026-09-23 08:30:19'
+      }
+    ];
+
+    for (const log of sampleLogs) {
+      await runDual(`
+        INSERT INTO activity_logs (type, action, title, actor, target_type, target_name, details, ip_address, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [log.type, log.action, log.title, log.actor, log.target_type, log.target_name, log.details, log.ip_address, log.status, log.created_at]);
+    }
+
+    // Seed sample access requests into access_requests table
+    await runDual(`
+      INSERT INTO access_requests (document_name, document_type, product_slug, requester_name, business_email, company, job_title, relationship, purpose, nda_accepted, nda_accepted_at, status, ip_address, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      'ISAE 3402 Type II Audit Report',
+      'compliance',
+      'bl-administration',
+      'Henrik Larsson',
+      'henrik.larsson@nordiclogistics.se',
+      'Nordic Logistics AB',
+      'Chief Information Security Officer',
+      'Customer',
+      'Annual vendor due diligence and compliance assessment for SaaS integration.',
+      1,
+      '2026-09-27T14:22:00Z',
+      'pending',
+      '194.237.112.5',
+      '2026-09-27 14:22:15'
+    ]);
+
+    await runDual(`
+      INSERT INTO access_requests (document_name, document_type, product_slug, requester_name, business_email, company, job_title, relationship, purpose, nda_accepted, nda_accepted_at, status, ip_address, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      'DPIA – BL Platforms',
+      'compliance',
+      'lundify',
+      'Sophia Lindqvist',
+      'sophia.l@fintechsolutions.se',
+      'FinTech Solutions Sweden',
+      'Head of Legal & Compliance',
+      'Prospective Customer',
+      'Pre-contractual GDPR compliance review and data transfer validation.',
+      1,
+      '2026-09-24T10:05:00Z',
+      'pending',
+      '83.254.18.90',
+      '2026-09-24 10:05:22'
+    ]);
+  }
 }

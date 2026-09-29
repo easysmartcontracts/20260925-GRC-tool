@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
-import { FileText, ShieldAlert, ExternalLink, Server, Globe, Mail, Activity, Edit2, X, Plus, Database, Key, Lock, Shield, CheckCircle2, XCircle, Info, MapPin, Clock, Phone, Building2, Printer } from 'lucide-react';
+import { FileText, ShieldAlert, ExternalLink, Server, Globe, Mail, Activity, Edit2, X, Plus, Database, Key, Lock, Shield, CheckCircle2, XCircle, Info, MapPin, Clock, Phone, Building2, Printer, Target, Users, ArrowRightLeft, ShieldCheck } from 'lucide-react';
 import { useCountry } from '../hooks/useCountry';
 import { useAuth } from '../contexts/AuthContext';
 import { useRequestAccess } from '../contexts/RequestAccessContext';
@@ -361,10 +361,10 @@ export function ProductDetail() {
           <button
             onClick={handlePrint}
             className="flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-sm font-semibold transition-all shadow-sm w-fit group"
-            title="Print overview or save as a Whitepaper PDF"
+            title="Print overview or save as a PDF"
           >
             <Printer className="w-4 h-4 text-slate-400 group-hover:text-white transition-colors" />
-            Print Whitepaper
+            Print / Save PDF
           </button>
 
           {canEdit && (
@@ -567,7 +567,7 @@ export function ProductDetail() {
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
               <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <Printer className="w-5 h-5 text-blue-500" />
-                Print Whitepaper PDF
+                Print / Save PDF
               </h3>
               <button 
                 onClick={() => setShowPrintHelper(false)}
@@ -1092,7 +1092,7 @@ export function ProductDetail() {
       {/* Subprocessor Inspection Modal */}
       {inspectingSub && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-xl w-full max-h-[90vh] flex flex-col transition-all border border-slate-100">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col transition-all border border-slate-100">
             <div className="p-6 border-b border-slate-100 bg-slate-50/50 rounded-t-xl flex items-start justify-between">
               <div>
                 <span className="inline-block px-2 py-0.5 text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-150 rounded uppercase tracking-wider mb-1">
@@ -1120,119 +1120,160 @@ export function ProductDetail() {
               </button>
             </div>
             
-            <div className="p-6 overflow-y-auto space-y-5 flex-1 text-sm text-slate-705">
-              {/* Identity & Contact Details */}
+            <div className="p-6 overflow-y-auto space-y-4 flex-1 text-sm text-slate-705">
+              {/* 1. Contact Details */}
               <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Identity & Contact Info
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 mb-2 flex items-center gap-1.5">
+                  <Phone className="w-3.5 h-3.5 text-blue-600" /> 1. Contact Details
                 </h4>
                 <div className="space-y-2">
-                  <p className="text-slate-805"><strong className="text-slate-700 font-semibold">Legal Name:</strong> {inspectingSub.name}</p>
+                  <p className="text-slate-800"><strong className="text-slate-700 font-semibold">Legal Entity:</strong> {inspectingSub.name}</p>
                   
                   {(inspectingSub.org_number || inspectingSub.lei_number) && (
-                    <div className="flex flex-col sm:flex-row gap-4 mt-2">
+                    <div className="flex flex-col sm:flex-row gap-4">
                       {inspectingSub.org_number && (
-                        <p className="text-slate-600 text-sm">
-                          <strong className="text-slate-700 font-semibold uppercase text-xs tracking-wider">Organisation Number:</strong><br/>
-                          {inspectingSub.org_number}
+                        <p className="text-slate-600 text-xs">
+                          <strong className="text-slate-700 font-semibold uppercase tracking-wider">Organisation No:</strong> {inspectingSub.org_number}
                         </p>
                       )}
                       {inspectingSub.lei_number && (
-                        <p className="text-slate-600 text-sm">
-                          <strong className="text-slate-700 font-semibold uppercase text-xs tracking-wider">LEI Number:</strong><br/>
-                          {inspectingSub.lei_number}
+                        <p className="text-slate-600 text-xs">
+                          <strong className="text-slate-700 font-semibold uppercase tracking-wider">LEI No:</strong> {inspectingSub.lei_number}
                         </p>
                       )}
                     </div>
                   )}
 
-                  <div className="mt-2">
-                    <p className="text-slate-800 mb-1"><strong className="text-slate-700 font-semibold uppercase text-xs tracking-wider">Contact & Address:</strong></p>
-                    <p className="text-slate-600 bg-white p-2.5 border border-slate-200 rounded text-xs whitespace-pre-wrap leading-relaxed">
+                  <div>
+                    <strong className="text-slate-700 font-semibold block text-xs uppercase tracking-wider mb-1">Official Address &amp; Compliance Channel:</strong>
+                    <div className="text-slate-700 bg-white p-3 border border-slate-200 rounded-md text-xs whitespace-pre-wrap leading-relaxed font-sans">
                       {inspectingSub.contact_details || 'No contact details specified.'}
-                    </p>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Location & Transfers */}
+              {/* 2. Purposes */}
               <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Location & Cross-Border Transfers
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 mb-2 flex items-center gap-1.5">
+                  <Target className="w-3.5 h-3.5 text-purple-600" /> 2. Purposes
                 </h4>
                 <div className="space-y-2">
-                  <p className="text-slate-805"><strong className="text-slate-700 font-semibold">Hosting Region:</strong> {inspectingSub.region}</p>
                   <div>
-                    <strong className="text-slate-700 font-semibold block mb-1">Applicable Countries / Jurisdictions:</strong>
-                    {inspectingSub.countries && inspectingSub.countries.length > 0 ? (
+                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-0.5">Purpose of Processing &amp; Involvement:</span>
+                    <p className="text-xs text-slate-800 bg-white p-3 border border-slate-200 rounded-md leading-relaxed whitespace-pre-wrap">
+                      {inspectingSub.purpose || 'No purpose specified.'}
+                    </p>
+                  </div>
+                  {inspectingSub.nature_of_processing && (
+                    <div>
+                      <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-0.5">Nature of Processing Activity:</span>
+                      <p className="text-xs text-slate-700 bg-white p-2.5 border border-slate-200 rounded-md leading-relaxed whitespace-pre-wrap">
+                        {inspectingSub.nature_of_processing}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 3. Categories (Data Subjects & Personal Data) */}
+              <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 mb-2 flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-indigo-600" /> 3. Categories (Data Subjects &amp; Types of Personal Data Collected)
+                </h4>
+                <div className="bg-white p-3 border border-slate-200 rounded-md text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">
+                  {inspectingSub.data_categories || 'Not specified.'}
+                </div>
+              </div>
+
+              {/* 4. Recipients */}
+              <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 mb-2 flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> 4. Recipients
+                </h4>
+                <div className="bg-white p-3 border border-slate-200 rounded-md text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">
+                  {inspectingSub.recipients || 'Authorized technical operations and support personnel under confidentiality agreements and strict access controls.'}
+                </div>
+              </div>
+
+              {/* 5. Transfers */}
+              <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 mb-2 flex items-center gap-1.5">
+                  <ArrowRightLeft className="w-3.5 h-3.5 text-amber-600" /> 5. Transfers
+                </h4>
+                <div className="space-y-2">
+                  <p className="text-slate-800 text-xs"><strong className="text-slate-700 font-semibold">Hosting Region:</strong> {inspectingSub.region}</p>
+                  
+                  {inspectingSub.countries && inspectingSub.countries.length > 0 && (
+                    <div>
+                      <strong className="text-slate-700 font-semibold block text-xs mb-1">Applicable Jurisdictions:</strong>
                       <div className="flex flex-wrap gap-1.5">
                         {inspectingSub.countries.map((c: string) => {
                           const countryObj = COUNTRIES.find(country => country.code === c);
                           return countryObj ? (
-                            <span key={c} className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-white text-slate-700 border border-slate-200 shadow-sm">
+                            <span key={c} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-white text-slate-700 border border-slate-200 shadow-sm">
                               {countryObj.flag} <span className="font-medium">{countryObj.name}</span> <span className="text-[10px] text-slate-400">({countryObj.code.toUpperCase()})</span>
                             </span>
                           ) : null;
                         })}
                       </div>
-                    ) : (
-                      <span className="text-slate-450 text-xs italic">All regions</span>
-                    )}
+                    </div>
+                  )}
+
+                  <div>
+                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-0.5">International Transfers &amp; Safeguards:</span>
+                    <div className="bg-white p-3 border border-slate-200 rounded-md text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">
+                      {inspectingSub.transfers || 'Processing occurs in the specified region. Any cross-border transfers are governed by EU Standard Contractual Clauses (SCCs) and appropriate supplementary measures.'}
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Processing Information */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Nature of Processing
-                  </h4>
-                  <p className="text-xs text-slate-650 leading-relaxed whitespace-pre-wrap">
-                    {inspectingSub.nature_of_processing || inspectingSub.category}
-                  </p>
-                </div>
-
-                <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span> Categories of Data
-                  </h4>
-                  <p className="text-xs text-slate-650 leading-relaxed whitespace-pre-wrap">
-                    {inspectingSub.data_categories || 'Not specified'}
-                  </p>
+              {/* 6. Retention */}
+              <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 mb-2 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-cyan-600" /> 6. Retention
+                </h4>
+                <div className="bg-white p-3 border border-slate-200 rounded-md text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">
+                  {inspectingSub.retention || 'Personal data is retained only for as long as necessary to fulfill the documented processing purpose or as required by applicable statutory obligations, followed by secure cryptographic erasure.'}
                 </div>
               </div>
 
-              {/* Purpose & Certifications */}
+              {/* 7. Security (Overview of Technical and Organizational Security Measures - TOMs) */}
               <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span> Purpose of Involvement
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 mb-2 flex items-center gap-1.5">
+                  <ShieldAlert className="w-3.5 h-3.5 text-blue-600" /> 7. Security (Technical and Organizational Security Measures)
                 </h4>
-                <p className="text-xs text-slate-650 leading-relaxed whitespace-pre-wrap mb-3">
-                  {inspectingSub.purpose}
-                </p>
                 
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-                  Security Certifications
-                </h4>
-                {inspectingSub.certifications ? (
-                  <div className="flex flex-wrap gap-1.5">
-                    {inspectingSub.certifications.split(',').map((cert: string) => (
-                      <span key={cert} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-50 text-green-700 border border-green-200">
-                        🛡️ {cert.trim()}
-                      </span>
-                    ))}
+                {inspectingSub.security_measures ? (
+                  <div className="bg-white p-3 border border-slate-200 rounded-md text-xs text-slate-700 leading-relaxed whitespace-pre-wrap mb-3">
+                    {inspectingSub.security_measures}
                   </div>
                 ) : (
-                  <span className="text-slate-450 text-xs italic">No security certifications listed</span>
+                  <div className="bg-white p-3 border border-slate-200 rounded-md text-xs text-slate-700 leading-relaxed whitespace-pre-wrap mb-3">
+                    Enforces industry-standard technical and organizational security measures (TOMs) including data encryption at rest and in transit, strict role-based access control (RBAC), multi-factor authentication, perimeter network protections, and regular vulnerability audits.
+                  </div>
+                )}
+
+                {inspectingSub.certifications && (
+                  <div>
+                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Audit Certifications &amp; Attestations:</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {inspectingSub.certifications.split(',').map((cert: string) => (
+                        <span key={cert} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          🛡️ {cert.trim()}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                 )}
                 
                 {/* DPA Section */}
                 {(inspectingSub.dpa_url || inspectingSub.dpa_requestable === 1) && (
                   <div className="mt-4 pt-3 border-t border-slate-200">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5">
-                      <FileText className="w-3.5 h-3.5" /> Data Processing Agreement (DPA)
-                    </h4>
+                    <h5 className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2 flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5" /> Data Processing Agreement (DPA) Addendum
+                    </h5>
                     {inspectingSub.dpa_url ? (
                       <a 
                         href={inspectingSub.dpa_url} 

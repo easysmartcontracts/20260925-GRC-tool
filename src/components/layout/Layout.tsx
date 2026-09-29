@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { TopNav } from './TopNav';
 import { Sidebar } from './Sidebar';
+import { Breadcrumbs } from './Breadcrumbs';
 
 export function Layout({ children, activeSection }: { children: React.ReactNode, activeSection: string }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -29,7 +30,14 @@ export function Layout({ children, activeSection }: { children: React.ReactNode,
         </div>
         
         <main id="main-content" className="flex-1 lg:ml-64 print:ml-0 overflow-y-auto print:overflow-visible bg-slate-50/50 print:bg-white outline-none flex flex-col" tabIndex={-1}>
-          <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12 print:py-0 flex-1 w-full">
+          {/* Breadcrumb Navigation Bar below the main header */}
+          <div className="print:hidden border-b border-slate-200/80 bg-white/90 backdrop-blur-xs sticky top-0 z-30 shadow-2xs">
+            <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-2.5">
+              <Breadcrumbs />
+            </div>
+          </div>
+
+          <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10 print:py-0 flex-1 w-full">
             {children}
           </div>
         </main>

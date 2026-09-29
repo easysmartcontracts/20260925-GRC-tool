@@ -4,9 +4,11 @@ import jwt from 'jsonwebtoken';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
 import { pool } from '../db.js';
 import { getJwtSecret } from '../utils/secret.js';
 import { csrfProtection } from '../middleware/csrf.js';
+import { logActivity } from '../utils/activity.js';
 
 const router = express.Router();
 const JWT_SECRET = getJwtSecret();
@@ -553,10 +555,26 @@ router.put('/product-policies/:id', async (req, res) => {
 });
 
 // Delete a policy
-router.delete('/product-policies/:id', async (req, res) => {
+router.delete('/product-policies/:id', async (req: any, res) => {
   const id = req.params.id;
   try {
+    const [existing]: any = await pool.query('SELECT name, product_slug FROM product_policies WHERE id = ?', [id]);
+    const policyName = existing?.[0]?.name || `Policy #${id}`;
+    const productSlug = existing?.[0]?.product_slug;
+
     await pool.query('DELETE FROM product_policies WHERE id = ?', [id]);
+
+    logActivity({
+      type: 'document_update',
+      action: 'delete',
+      title: `Deleted policy '${policyName}' (ID: ${id})`,
+      actor: req.user?.username || 'Admin',
+      target_type: 'policy',
+      target_name: policyName,
+      ip_address: req.ip || req.socket.remoteAddress,
+      details: { id, name: policyName, productSlug }
+    });
+
     res.json({ success: true });
   } catch (err: any) {
     console.error('Delete policy error:', err);
@@ -623,6 +641,10 @@ router.post('/product-subprocessors/:slug', async (req, res) => {
     certifications, 
     dpa_url,
     dpa_requestable,
+    recipients,
+    transfers,
+    retention,
+    security_measures,
     countries 
   } = req.body;
   
@@ -630,7 +652,7 @@ router.post('/product-subprocessors/:slug', async (req, res) => {
   try {
     await conn.beginTransaction();
     const [result]: any = await conn.query(
-      'INSERT INTO product_subprocessors (product_slug, name, category, region, purpose, website_url, contact_details, org_number, lei_number, nature_of_processing, data_categories, certifications, dpa_url, dpa_requestable) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO product_subprocessors (product_slug, name, category, region, purpose, website_url, contact_details, org_number, lei_number, nature_of_processing, data_categories, certifications, dpa_url, dpa_requestable, recipients, transfers, retention, security_measures) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         slug, 
         name, 
@@ -645,7 +667,11 @@ router.post('/product-subprocessors/:slug', async (req, res) => {
         data_categories || null,
         certifications || null,
         dpa_url || null,
-        dpa_requestable ? 1 : 0
+        dpa_requestable ? 1 : 0,
+        recipients || null,
+        transfers || null,
+        retention || null,
+        security_measures || null
       ]
     );
     
@@ -702,8 +728,12 @@ router.put('/product-subprocessors/:id', async (req, res) => {
     nature_of_processing, 
     data_categories, 
     certifications, 
-    dpa_url,
+    dpa_url, 
     dpa_requestable,
+    recipients,
+    transfers,
+    retention,
+    security_measures,
     countries 
   } = req.body;
   
@@ -711,7 +741,7 @@ router.put('/product-subprocessors/:id', async (req, res) => {
   try {
     await conn.beginTransaction();
     await conn.query(
-      'UPDATE product_subprocessors SET name = ?, category = ?, region = ?, purpose = ?, website_url = ?, contact_details = ?, org_number = ?, lei_number = ?, nature_of_processing = ?, data_categories = ?, certifications = ?, dpa_url = ?, dpa_requestable = ? WHERE id = ?',
+      'UPDATE product_subprocessors SET name = ?, category = ?, region = ?, purpose = ?, website_url = ?, contact_details = ?, org_number = ?, lei_number = ?, nature_of_processing = ?, data_categories = ?, certifications = ?, dpa_url = ?, dpa_requestable = ?, recipients = ?, transfers = ?, retention = ?, security_measures = ? WHERE id = ?',
       [
         name, 
         category, 
@@ -726,6 +756,10 @@ router.put('/product-subprocessors/:id', async (req, res) => {
         certifications || null,
         dpa_url || null,
         dpa_requestable ? 1 : 0,
+        recipients || null,
+        transfers || null,
+        retention || null,
+        security_measures || null,
         id
       ]
     );
@@ -781,7 +815,7 @@ router.get('/documents', async (req, res) => {
 });
 
 // Create a document
-router.post('/documents', async (req, res) => {
+router.post('/documents', async (req: any, res) => {
   const { name, slug, type, category, requires_nda, url, provider, findings_status, products, description } = req.body;
   
   if (!slug || !name || !type) return res.status(400).json({ error: 'Missing required fields' });
@@ -791,6 +825,18 @@ router.post('/documents', async (req, res) => {
       INSERT INTO documents (name, slug, type, category, requires_nda, url, provider, findings_status, products, description)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [name, slug, type, category, requires_nda ? 1 : 0, url, provider, findings_status, JSON.stringify(products || []), description || null]);
+    
+    logActivity({
+      type: 'document_update',
+      action: 'create',
+      title: `Created document '${name}' (${type})`,
+      actor: req.user?.username || 'Admin',
+      target_type: 'document',
+      target_name: name,
+      ip_address: req.ip || req.socket.remoteAddress,
+      details: { slug, type, category, requires_nda: !!requires_nda }
+    });
+
     res.json({ success: true });
   } catch (err: any) {
     console.error('Create document error:', err);
@@ -802,7 +848,7 @@ router.post('/documents', async (req, res) => {
 });
 
 // Update a document
-router.put('/documents/:id', async (req, res) => {
+router.put('/documents/:id', async (req: any, res) => {
   const id = req.params.id;
   const { name, slug, type, category, requires_nda, url, provider, findings_status, products, description } = req.body;
   
@@ -812,6 +858,18 @@ router.put('/documents/:id', async (req, res) => {
       SET name = ?, slug = ?, type = ?, category = ?, requires_nda = ?, url = ?, provider = ?, findings_status = ?, products = ?, description = ?
       WHERE id = ?
     `, [name, slug, type, category, requires_nda ? 1 : 0, url, provider, findings_status, JSON.stringify(products || []), description || null, id]);
+    
+    logActivity({
+      type: 'document_update',
+      action: 'update',
+      title: `Updated document '${name}' (ID: ${id})`,
+      actor: req.user?.username || 'Admin',
+      target_type: 'document',
+      target_name: name,
+      ip_address: req.ip || req.socket.remoteAddress,
+      details: { id, slug, type, category, requires_nda: !!requires_nda }
+    });
+
     res.json({ success: true });
   } catch (err: any) {
     console.error('Update document error:', err);
@@ -820,10 +878,25 @@ router.put('/documents/:id', async (req, res) => {
 });
 
 // Delete a document
-router.delete('/documents/:id', async (req, res) => {
+router.delete('/documents/:id', async (req: any, res) => {
   const id = req.params.id;
   try {
+    const [existing]: any = await pool.query('SELECT name FROM documents WHERE id = ?', [id]);
+    const docName = existing?.[0]?.name || `Document #${id}`;
+
     await pool.query('DELETE FROM documents WHERE id = ?', [id]);
+
+    logActivity({
+      type: 'document_update',
+      action: 'delete',
+      title: `Deleted document '${docName}' (ID: ${id})`,
+      actor: req.user?.username || 'Admin',
+      target_type: 'document',
+      target_name: docName,
+      ip_address: req.ip || req.socket.remoteAddress,
+      details: { id, name: docName }
+    });
+
     res.json({ success: true });
   } catch (err: any) {
     console.error('Delete document error:', err);
@@ -984,6 +1057,17 @@ router.post('/nda-versions', async (req: any, res) => {
 
     await conn.commit();
 
+    logActivity({
+      type: 'document_update',
+      action: 'create',
+      title: `Created Non-Disclosure Agreement (NDA) v${version.trim()}`,
+      actor: createdBy,
+      target_type: 'nda',
+      target_name: `NDA v${version.trim()}`,
+      ip_address: req.ip || req.socket.remoteAddress,
+      details: { version: version.trim(), change_summary, isCurrent }
+    });
+
     const [allVersions]: any = await pool.query('SELECT * FROM nda_versions ORDER BY id DESC');
     res.json({ success: true, id: result.insertId, versions: allVersions });
   } catch (err: any) {
@@ -1121,6 +1205,513 @@ router.delete('/nda-versions/:id', async (req: any, res) => {
     res.json({ success: true, versions: allVersions });
   } catch (err: any) {
     console.error('Error deleting NDA version:', err);
+    res.status(500).json({ error: err.message || 'Database error' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Activity Logs & Audit Trails
+// ---------------------------------------------------------------------------
+
+router.get('/activity-logs', async (req: any, res) => {
+  try {
+    const { type, search, limit = '50', offset = '0' } = req.query;
+    const limitNum = Math.min(Math.max(parseInt(String(limit), 10) || 50, 1), 200);
+    const offsetNum = Math.max(parseInt(String(offset), 10) || 0, 0);
+
+    let whereClauses: string[] = [];
+    let params: any[] = [];
+
+    if (type && type !== 'all') {
+      whereClauses.push('type = ?');
+      params.push(type);
+    }
+
+    if (search && String(search).trim() !== '') {
+      const q = `%${String(search).trim()}%`;
+      whereClauses.push('(title LIKE ? OR actor LIKE ? OR target_name LIKE ? OR ip_address LIKE ? OR details LIKE ?)');
+      params.push(q, q, q, q, q);
+    }
+
+    const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+    // Fetch filtered logs
+    const [logs]: any = await pool.query(`
+      SELECT id, type, action, title, actor, target_type, target_name, details, ip_address, status, created_at
+      FROM activity_logs
+      ${whereSql}
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+    `, [...params, limitNum, offsetNum]);
+
+    // Fetch count for current filter
+    const [totalRows]: any = await pool.query(`
+      SELECT count(*) as count FROM activity_logs ${whereSql}
+    `, params);
+    const total = totalRows?.[0]?.count || 0;
+
+    // Fetch overall stats
+    const [statsRows]: any = await pool.query(`
+      SELECT 
+        count(*) as total,
+        sum(case when type = 'document_update' then 1 else 0 end) as document_updates,
+        sum(case when type = 'access_request' then 1 else 0 end) as access_requests,
+        sum(case when type = 'user_login' then 1 else 0 end) as user_logins
+      FROM activity_logs
+    `);
+
+    const stats = {
+      total: statsRows?.[0]?.total || 0,
+      document_updates: statsRows?.[0]?.document_updates || 0,
+      access_requests: statsRows?.[0]?.access_requests || 0,
+      user_logins: statsRows?.[0]?.user_logins || 0
+    };
+
+    const mappedLogs = (logs || []).map((l: any) => {
+      let parsedDetails = null;
+      if (l.details) {
+        try {
+          parsedDetails = JSON.parse(l.details);
+        } catch (e) {
+          parsedDetails = l.details;
+        }
+      }
+      return {
+        ...l,
+        details: parsedDetails
+      };
+    });
+
+    // Ensure all access_request entries have requestId linked
+    for (const l of mappedLogs) {
+      if (l.type === 'access_request' && !l.details?.requestId && l.details?.requester) {
+        try {
+          const [match]: any = await pool.query(
+            'SELECT id FROM access_requests WHERE requester_name = ? AND document_name = ? LIMIT 1',
+            [l.details.requester, l.target_name || '']
+          );
+          if (match && match.length > 0) {
+            l.details.requestId = match[0].id;
+          }
+        } catch (e) {}
+      }
+    }
+
+    // Enrich access request entries with current watermarked files & status from access_requests table
+    const requestIds = mappedLogs
+      .filter((l: any) => l.type === 'access_request' && l.details?.requestId)
+      .map((l: any) => l.details.requestId);
+
+    if (requestIds.length > 0) {
+      const placeholders = requestIds.map(() => '?').join(',');
+      const [reqRows]: any = await pool.query(
+        `SELECT id, status, document_file_url, watermarked_file_url, document_name, requester_name, business_email, company FROM access_requests WHERE id IN (${placeholders})`,
+        requestIds
+      );
+      const reqMap = new Map();
+      for (const r of reqRows) {
+        reqMap.set(r.id, r);
+      }
+      for (const l of mappedLogs) {
+        if (l.type === 'access_request' && l.details?.requestId) {
+          const reqItem = reqMap.get(l.details.requestId);
+          if (reqItem) {
+            l.details.status = reqItem.status;
+            l.details.document_file_url = reqItem.document_file_url;
+            l.details.watermarked_file_url = reqItem.watermarked_file_url;
+            if (!l.details.documentName) l.details.documentName = reqItem.document_name;
+            if (!l.details.requester) l.details.requester = reqItem.requester_name;
+            if (!l.details.email) l.details.email = reqItem.business_email;
+            if (!l.details.company) l.details.company = reqItem.company;
+          }
+        }
+      }
+    }
+
+    res.json({
+      logs: mappedLogs,
+      total,
+      stats
+    });
+  } catch (err: any) {
+    console.error('Error fetching activity logs:', err);
+    res.status(500).json({ error: err.message || 'Database error' });
+  }
+});
+
+router.get('/access-requests', async (req: any, res) => {
+  try {
+    const [rows]: any = await pool.query(`
+      SELECT * FROM access_requests ORDER BY created_at DESC
+    `);
+    res.json(rows || []);
+  } catch (err: any) {
+    console.error('Error fetching access requests:', err);
+    res.status(500).json({ error: err.message || 'Database error' });
+  }
+});
+
+router.put('/access-requests/:id/status', async (req: any, res) => {
+  const id = req.params.id;
+  const { status } = req.body;
+  if (!status || !['pending', 'approved', 'rejected', 'fulfilled'].includes(status)) {
+    return res.status(400).json({ error: 'Invalid status' });
+  }
+
+  try {
+    const [existing]: any = await pool.query('SELECT * FROM access_requests WHERE id = ?', [id]);
+    if (!existing || existing.length === 0) {
+      return res.status(404).json({ error: 'Access request not found' });
+    }
+    const reqItem = existing[0];
+
+    await pool.query('UPDATE access_requests SET status = ? WHERE id = ?', [status, id]);
+
+    logActivity({
+      type: 'access_request',
+      action: `request_${status}`,
+      title: `Access request for '${reqItem.document_name}' (${reqItem.requester_name}) marked as ${status.toUpperCase()}`,
+      actor: req.user?.username || 'Admin',
+      target_type: 'access_request',
+      target_name: reqItem.document_name,
+      ip_address: req.ip || req.socket.remoteAddress,
+      status: status === 'rejected' ? 'failed' : 'success',
+      details: {
+        requestId: id,
+        documentName: reqItem.document_name,
+        requester: reqItem.requester_name,
+        email: reqItem.business_email,
+        company: reqItem.company,
+        previousStatus: reqItem.status,
+        newStatus: status,
+        updatedBy: req.user?.username
+      }
+    });
+
+    res.json({ success: true, status });
+  } catch (err: any) {
+    console.error('Error updating access request status:', err);
+    res.status(500).json({ error: err.message || 'Database error' });
+  }
+});
+
+// Upload document for an access request and automatically generate a watermarked version
+router.post('/access-requests/:id/upload-and-watermark', requireAdminOrMod, uploadPdf.single('document'), async (req: any, res) => {
+  const id = req.params.id;
+  if (!req.file) {
+    return res.status(400).json({ error: 'No PDF file uploaded' });
+  }
+
+  try {
+    const [existing]: any = await pool.query('SELECT * FROM access_requests WHERE id = ?', [id]);
+    if (!existing || existing.length === 0) {
+      return res.status(404).json({ error: 'Access request not found' });
+    }
+    const reqItem = existing[0];
+    const uploadedOriginalUrl = `/uploads/${req.file.filename}`;
+    const originalFilePath = path.join(process.cwd(), 'public', 'uploads', req.file.filename);
+
+    // Read original PDF
+    const originalPdfBytes = fs.readFileSync(originalFilePath);
+    const pdfDoc = await PDFDocument.load(originalPdfBytes);
+    const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+    const pages = pdfDoc.getPages();
+    const recipientName = reqItem.requester_name || 'Authorized Recipient';
+    const recipientEmail = reqItem.business_email || '';
+    const recipientCompany = reqItem.company || '';
+    const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+
+    // Build watermark texts
+    const diagonalMain = `CONFIDENTIAL - LICENSED TO: ${recipientCompany ? recipientCompany.toUpperCase() : recipientName.toUpperCase()}`;
+    const diagonalSub = `${recipientName} (${recipientEmail}) • Request ID #${id}`;
+    const headerFooterBanner = `AUTHORIZED COPY: ${recipientName} | ${recipientEmail} | ${recipientCompany} | Request #${id} | ${timestamp}`;
+
+    for (const page of pages) {
+      const { width, height } = page.getSize();
+
+      // Top running banner
+      page.drawRectangle({
+        x: 0,
+        y: height - 20,
+        width: width,
+        height: 20,
+        color: rgb(0.96, 0.97, 0.99),
+        opacity: 0.92,
+      });
+      page.drawText(headerFooterBanner, {
+        x: 15,
+        y: height - 14,
+        size: 7.5,
+        font: helveticaFont,
+        color: rgb(0.2, 0.25, 0.35),
+      });
+
+      // Bottom running banner
+      page.drawRectangle({
+        x: 0,
+        y: 0,
+        width: width,
+        height: 18,
+        color: rgb(0.96, 0.97, 0.99),
+        opacity: 0.92,
+      });
+      page.drawText(`Björn Lunden Trust Center • Protected under NDA • Distribution, copying, or forwarding strictly prohibited.`, {
+        x: 15,
+        y: 5,
+        size: 7,
+        font: helveticaFont,
+        color: rgb(0.4, 0.45, 0.55),
+      });
+
+      // Diagonal semi-transparent watermark across the center
+      const fontSize = Math.min(width, height) > 500 ? 19 : 14;
+      const subFontSize = fontSize * 0.7;
+      
+      const centerX = width / 2;
+      const centerY = height / 2;
+
+      // Diagonal angle: 45 degrees
+      page.drawText(diagonalMain, {
+        x: centerX - 180,
+        y: centerY - 10,
+        size: fontSize,
+        font: helveticaBold,
+        color: rgb(0.72, 0.15, 0.15), // Muted red/burgundy security stamp
+        opacity: 0.22,
+        rotate: degrees(45),
+      });
+
+      page.drawText(diagonalSub, {
+        x: centerX - 180,
+        y: centerY - 32,
+        size: subFontSize,
+        font: helveticaFont,
+        color: rgb(0.3, 0.35, 0.45),
+        opacity: 0.24,
+        rotate: degrees(45),
+      });
+    }
+
+    const watermarkedPdfBytes = await pdfDoc.save();
+    const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    const watermarkedFileName = `watermarked-req-${id}-${Date.now()}.pdf`;
+    const watermarkedFilePath = path.join(uploadsDir, watermarkedFileName);
+    fs.writeFileSync(watermarkedFilePath, watermarkedPdfBytes);
+    const watermarkedFileUrl = `/uploads/${watermarkedFileName}`;
+
+    // Update the request record in database
+    const newStatus = req.body?.status || (reqItem.status === 'pending' ? 'fulfilled' : reqItem.status);
+    await pool.query(
+      'UPDATE access_requests SET document_file_url = ?, watermarked_file_url = ?, status = ? WHERE id = ?',
+      [uploadedOriginalUrl, watermarkedFileUrl, newStatus, id]
+    );
+
+    await logActivity({
+      type: 'access_request',
+      action: 'document_watermarked',
+      title: `Watermarked PDF generated for '${reqItem.document_name}' (${reqItem.requester_name} - ${reqItem.company})`,
+      actor: req.user?.username || 'Admin',
+      target_type: 'access_request',
+      target_name: reqItem.document_name,
+      ip_address: req.ip || req.socket.remoteAddress,
+      status: 'success',
+      details: {
+        requestId: id,
+        documentName: reqItem.document_name,
+        requester: reqItem.requester_name,
+        email: reqItem.business_email,
+        company: reqItem.company,
+        status: newStatus,
+        originalFile: uploadedOriginalUrl,
+        watermarkedFile: watermarkedFileUrl
+      }
+    });
+
+    res.json({
+      success: true,
+      status: newStatus,
+      document_file_url: uploadedOriginalUrl,
+      watermarked_file_url: watermarkedFileUrl,
+      requester: {
+        name: recipientName,
+        email: recipientEmail,
+        company: recipientCompany
+      }
+    });
+  } catch (err: any) {
+    console.error('Error watermarking PDF for request:', err);
+    res.status(500).json({ error: err.message || 'Failed to watermark PDF' });
+  }
+});
+
+// Regenerate or watermark an existing uploaded PDF for an access request
+router.post('/access-requests/:id/generate-watermark', requireAdminOrMod, async (req: any, res) => {
+  const id = req.params.id;
+  const { sourceFileUrl } = req.body;
+
+  try {
+    const [existing]: any = await pool.query('SELECT * FROM access_requests WHERE id = ?', [id]);
+    if (!existing || existing.length === 0) {
+      return res.status(404).json({ error: 'Access request not found' });
+    }
+    const reqItem = existing[0];
+    const fileToUse = sourceFileUrl || reqItem.document_file_url;
+
+    if (!fileToUse) {
+      return res.status(400).json({ error: 'No source PDF found to watermark' });
+    }
+
+    const relativePath = fileToUse.replace(/^\//, '');
+    const originalFilePath = path.join(process.cwd(), 'public', relativePath.replace(/^public\//, ''));
+    if (!fs.existsSync(originalFilePath)) {
+      return res.status(404).json({ error: 'Source file could not be found on server' });
+    }
+
+    const originalPdfBytes = fs.readFileSync(originalFilePath);
+    const pdfDoc = await PDFDocument.load(originalPdfBytes);
+    const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+    const pages = pdfDoc.getPages();
+    const recipientName = reqItem.requester_name || 'Authorized Recipient';
+    const recipientEmail = reqItem.business_email || '';
+    const recipientCompany = reqItem.company || '';
+    const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+
+    const diagonalMain = `CONFIDENTIAL - LICENSED TO: ${recipientCompany ? recipientCompany.toUpperCase() : recipientName.toUpperCase()}`;
+    const diagonalSub = `${recipientName} (${recipientEmail}) • Request ID #${id}`;
+    const headerFooterBanner = `AUTHORIZED COPY: ${recipientName} | ${recipientEmail} | ${recipientCompany} | Request #${id} | ${timestamp}`;
+
+    for (const page of pages) {
+      const { width, height } = page.getSize();
+
+      page.drawRectangle({
+        x: 0,
+        y: height - 20,
+        width: width,
+        height: 20,
+        color: rgb(0.96, 0.97, 0.99),
+        opacity: 0.92,
+      });
+      page.drawText(headerFooterBanner, {
+        x: 15,
+        y: height - 14,
+        size: 7.5,
+        font: helveticaFont,
+        color: rgb(0.2, 0.25, 0.35),
+      });
+
+      page.drawRectangle({
+        x: 0,
+        y: 0,
+        width: width,
+        height: 18,
+        color: rgb(0.96, 0.97, 0.99),
+        opacity: 0.92,
+      });
+      page.drawText(`Björn Lunden Trust Center • Protected under NDA • Distribution, copying, or forwarding strictly prohibited.`, {
+        x: 15,
+        y: 5,
+        size: 7,
+        font: helveticaFont,
+        color: rgb(0.4, 0.45, 0.55),
+      });
+
+      const fontSize = Math.min(width, height) > 500 ? 19 : 14;
+      const subFontSize = fontSize * 0.7;
+      const centerX = width / 2;
+      const centerY = height / 2;
+
+      page.drawText(diagonalMain, {
+        x: centerX - 180,
+        y: centerY - 10,
+        size: fontSize,
+        font: helveticaBold,
+        color: rgb(0.72, 0.15, 0.15),
+        opacity: 0.22,
+        rotate: degrees(45),
+      });
+
+      page.drawText(diagonalSub, {
+        x: centerX - 180,
+        y: centerY - 32,
+        size: subFontSize,
+        font: helveticaFont,
+        color: rgb(0.3, 0.35, 0.45),
+        opacity: 0.24,
+        rotate: degrees(45),
+      });
+    }
+
+    const watermarkedPdfBytes = await pdfDoc.save();
+    const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    const watermarkedFileName = `watermarked-req-${id}-${Date.now()}.pdf`;
+    const watermarkedFilePath = path.join(uploadsDir, watermarkedFileName);
+    fs.writeFileSync(watermarkedFilePath, watermarkedPdfBytes);
+    const watermarkedFileUrl = `/uploads/${watermarkedFileName}`;
+
+    await pool.query(
+      'UPDATE access_requests SET watermarked_file_url = ? WHERE id = ?',
+      [watermarkedFileUrl, id]
+    );
+
+    res.json({
+      success: true,
+      watermarked_file_url: watermarkedFileUrl
+    });
+  } catch (err: any) {
+    console.error('Error generating watermark:', err);
+    res.status(500).json({ error: err.message || 'Failed to generate watermarked document' });
+  }
+});
+
+router.get('/activity-logs/export', async (req: any, res) => {
+  try {
+    const [logs]: any = await pool.query(`
+      SELECT id, type, action, title, actor, target_type, target_name, details, ip_address, status, created_at
+      FROM activity_logs
+      ORDER BY created_at DESC
+      LIMIT 1000
+    `);
+
+    const format = req.query.format === 'json' ? 'json' : 'csv';
+
+    if (format === 'json') {
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="audit-activity-log-${new Date().toISOString().slice(0, 10)}.json"`);
+      return res.json(logs);
+    }
+
+    // CSV format
+    const headers = ['ID', 'Timestamp', 'Type', 'Action', 'Title', 'Actor', 'Target Type', 'Target Name', 'IP Address', 'Status'];
+    const rows = (logs || []).map((l: any) => [
+      l.id,
+      `"${l.created_at || ''}"`,
+      `"${l.type || ''}"`,
+      `"${l.action || ''}"`,
+      `"${(l.title || '').replace(/"/g, '""')}"`,
+      `"${l.actor || ''}"`,
+      `"${l.target_type || ''}"`,
+      `"${(l.target_name || '').replace(/"/g, '""')}"`,
+      `"${l.ip_address || ''}"`,
+      `"${l.status || ''}"`
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="audit-activity-log-${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.send(csvContent);
+  } catch (err: any) {
+    console.error('Error exporting activity logs:', err);
     res.status(500).json({ error: err.message || 'Database error' });
   }
 });

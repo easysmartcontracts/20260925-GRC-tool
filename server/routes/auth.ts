@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { pool } from '../db.js';
 import { getJwtSecret } from '../utils/secret.js';
+import { logActivity } from '../utils/activity.js';
 
 const router = express.Router();
 const JWT_SECRET = getJwtSecret();
@@ -41,11 +42,38 @@ router.post('/login', async (req, res) => {
       attempt.lockUntil = now + 10 * 60 * 1000; // Lock for 10 minutes
     }
     loginAttempts.set(username, attempt);
+
+    // Audit log failed login
+    logActivity({
+      type: 'user_login',
+      action: 'login_failed',
+      title: `Failed login attempt for username '${username}'`,
+      actor: username,
+      target_type: 'user',
+      target_name: username,
+      details: { reason: 'Invalid credentials', attemptCount: attempt.count },
+      ip_address: req.ip || req.socket.remoteAddress,
+      status: 'failed'
+    });
+
     return res.status(401).json({ error: 'Invalid credentials' });
   }
 
   // Successful login - reset attempts
   loginAttempts.delete(username);
+
+  // Audit log successful login
+  logActivity({
+    type: 'user_login',
+    action: 'login_success',
+    title: `User '${user.username}' logged in successfully`,
+    actor: user.username,
+    target_type: 'user',
+    target_name: user.username,
+    details: { role: user.role, rememberMe: !!rememberMe },
+    ip_address: req.ip || req.socket.remoteAddress,
+    status: 'success'
+  });
 
   const expiresIn = rememberMe ? '30d' : '1d';
   const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn });

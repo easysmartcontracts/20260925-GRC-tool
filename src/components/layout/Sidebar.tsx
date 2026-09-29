@@ -182,6 +182,21 @@ export function Sidebar({ isOpen, onClose, activeSection }: SidebarProps) {
                     KPI Dashboard
                   </Link>
                 </li>
+                <li>
+                  <Link
+                    to="/admin#activity-log"
+                    onClick={() => {
+                      onClose();
+                      setTimeout(() => {
+                        const el = document.getElementById('activity-log');
+                        if (el) el.scrollIntoView({ behavior: 'smooth' });
+                      }, 100);
+                    }}
+                    className="block px-3 py-2.5 rounded-md text-base font-medium transition-colors text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  >
+                    Activity Log
+                  </Link>
+                </li>
               </ul>
             </div>
           )}

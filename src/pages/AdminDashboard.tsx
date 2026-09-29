@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 import { useAuth } from '../contexts/AuthContext';
@@ -6,7 +7,39 @@ import { Button } from '../components/ui/Button';
 import { BjornLogo } from '../components/BjornLogo';
 import { ConfirmationModal } from '../components/ui/ConfirmationModal';
 import { AnalyticsPanel } from '../components/AnalyticsPanel';
-import { Check, AlertCircle, Edit2, Trash2, Plus, ExternalLink, X, Globe, History, Calendar, User, Eye, RotateCcw, Clock, CheckCircle2, Search, ArrowLeftRight, FileText, ChevronRight } from 'lucide-react';
+import { ActivityLog } from '../components/ActivityLog';
+import { DocumentWatermarkManager } from '../components/DocumentWatermarkManager';
+import { setLastSelectedProduct } from '../utils/productSelection';
+import { 
+  Check, 
+  AlertCircle, 
+  Edit2, 
+  Trash2, 
+  Plus, 
+  ExternalLink, 
+  X, 
+  Globe, 
+  History, 
+  Calendar, 
+  User, 
+  Eye, 
+  RotateCcw, 
+  Clock, 
+  CheckCircle2, 
+  Search, 
+  ArrowLeftRight, 
+  FileText, 
+  ChevronRight, 
+  Stamp, 
+  BarChart3, 
+  Users, 
+  Palette, 
+  Package, 
+  ChevronDown, 
+  ChevronsUpDown, 
+  ShieldCheck,
+  SlidersHorizontal
+} from 'lucide-react';
 import { COUNTRIES } from '../constants';
 
 export type NdaVersion = {
@@ -21,6 +54,80 @@ export type NdaVersion = {
   created_at: string;
 };
 
+interface AccordionSectionProps {
+  id: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  icon: React.ComponentType<{ className?: string }>;
+  iconBg: string;
+  iconColor: string;
+  title: string;
+  subtitle: string;
+  badge?: React.ReactNode;
+  children: React.ReactNode;
+}
+
+function AccordionSection({
+  id,
+  isOpen,
+  onToggle,
+  icon: Icon,
+  iconBg,
+  iconColor,
+  title,
+  subtitle,
+  badge,
+  children
+}: AccordionSectionProps) {
+  return (
+    <div 
+      id={`section-${id}`} 
+      className={`bg-white rounded-xl border transition-all duration-200 shadow-2xs scroll-mt-6 ${
+        isOpen ? 'border-slate-300 ring-1 ring-slate-200/80 shadow-xs' : 'border-slate-200 hover:border-slate-300'
+      }`}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        className={`w-full p-4.5 sm:p-5 text-left flex items-center justify-between gap-4 transition-colors rounded-xl select-none cursor-pointer ${
+          isOpen ? 'bg-slate-50/80 border-b border-slate-200/80 rounded-b-none' : 'hover:bg-slate-50/60'
+        }`}
+        aria-expanded={isOpen}
+      >
+        <div className="flex items-center gap-3.5 min-w-0">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconBg} ${iconColor} shadow-2xs`}>
+            <Icon className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-base font-bold text-slate-900 tracking-tight">{title}</h2>
+              {badge}
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5 truncate max-w-xl">{subtitle}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 shrink-0">
+          <span className="text-xs font-semibold text-slate-400 hidden sm:inline">
+            {isOpen ? 'Collapse' : 'Expand'}
+          </span>
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 bg-white border border-slate-200/70 transition-transform duration-200 ${
+            isOpen ? 'rotate-180 bg-slate-100 text-slate-800' : ''
+          }`}>
+            <ChevronDown className="w-4 h-4" />
+          </div>
+        </div>
+      </button>
+
+      {isOpen && (
+        <div className="p-5 sm:p-6 animate-in fade-in duration-150">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AdminDashboard() {
   const { user, publicPages, refreshPublicPages, getAuthHeaders, siteSettings, refreshSiteSettings } = useAuth();
   const [users, setUsers] = useState<any[]>([]);
@@ -30,6 +137,59 @@ export function AdminDashboard() {
   const [newRole, setNewRole] = useState('viewer');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+  const [showAddUser, setShowAddUser] = useState(false);
+
+  // Accordion Sections State
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    'watermark-hub': true,      // Open by default for immediate document fulfillment
+    'activity-log': false,
+    'analytics': false,
+    'user-management': false,
+    'branding': false,
+    'product-management': false,
+    'public-pages': false
+  });
+
+  const toggleSection = (sectionKey: string) => {
+    setOpenSections(prev => ({
+      ...prev,
+      [sectionKey]: !prev[sectionKey]
+    }));
+  };
+
+  const expandAll = () => {
+    setOpenSections({
+      'watermark-hub': true,
+      'activity-log': true,
+      'analytics': true,
+      'user-management': true,
+      'branding': true,
+      'product-management': true,
+      'public-pages': true
+    });
+  };
+
+  const collapseAll = () => {
+    setOpenSections({
+      'watermark-hub': false,
+      'activity-log': false,
+      'analytics': false,
+      'user-management': false,
+      'branding': false,
+      'product-management': false,
+      'public-pages': false
+    });
+  };
+
+  const openAndScrollTo = (sectionKey: string) => {
+    setOpenSections(prev => ({ ...prev, [sectionKey]: true }));
+    setTimeout(() => {
+      const el = document.getElementById(`section-${sectionKey}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 50);
+  };
 
   // Site Branding states
   const [brandingForm, setBrandingForm] = useState({
@@ -1245,54 +1405,430 @@ export function AdminDashboard() {
           </div>
         </div>
       )}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Admin Portal</h1>
-        <p className="text-slate-500 mt-1">Manage users, roles, and access permissions.</p>
+      {/* Dashboard Executive Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Admin Portal</h1>
+          <p className="text-slate-500 mt-1 text-sm">
+            Unified management dashboard for document watermarking, security audit trails, telemetry, access permissions, and trust center branding.
+          </p>
+        </div>
+
+        {/* Global Expand / Collapse All Controls */}
+        <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+          <span className="text-xs text-slate-500 font-medium">
+            {Object.values(openSections).filter(Boolean).length} of 7 sections open
+          </span>
+          <div className="h-4 w-px bg-slate-200 mx-1" />
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={expandAll}
+            className="text-xs text-slate-700 hover:text-slate-900 bg-white shadow-2xs"
+          >
+            Expand All
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={collapseAll}
+            className="text-xs text-slate-700 hover:text-slate-900 bg-white shadow-2xs"
+          >
+            Collapse All
+          </Button>
+        </div>
       </div>
 
-      <div className="mb-8">
-        <AnalyticsPanel />
+      {/* Accordion Quick-Jump Navigation Tabs */}
+      <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-2xs flex items-center gap-2 overflow-x-auto scrollbar-none">
+        <span className="text-slate-400 font-bold uppercase text-[10px] tracking-wider shrink-0 mr-1 flex items-center gap-1">
+          <SlidersHorizontal className="w-3 h-3" />
+          Sections:
+        </span>
+
+        <button
+          type="button"
+          onClick={() => openAndScrollTo('watermark-hub')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 flex items-center gap-1.5 ${
+            openSections['watermark-hub'] 
+              ? 'bg-blue-600 text-white shadow-xs' 
+              : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+          }`}
+        >
+          <Stamp className="w-3.5 h-3.5" />
+          Document Watermarking
+        </button>
+
+        <button
+          type="button"
+          onClick={() => openAndScrollTo('activity-log')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 flex items-center gap-1.5 ${
+            openSections['activity-log'] 
+              ? 'bg-purple-600 text-white shadow-xs' 
+              : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+          }`}
+        >
+          <ShieldCheck className="w-3.5 h-3.5" />
+          Security Audit Log
+        </button>
+
+        <button
+          type="button"
+          onClick={() => openAndScrollTo('analytics')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 flex items-center gap-1.5 ${
+            openSections['analytics'] 
+              ? 'bg-emerald-600 text-white shadow-xs' 
+              : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+          }`}
+        >
+          <BarChart3 className="w-3.5 h-3.5" />
+          Analytics Telemetry
+        </button>
+
+        <button
+          type="button"
+          onClick={() => openAndScrollTo('user-management')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 flex items-center gap-1.5 ${
+            openSections['user-management'] 
+              ? 'bg-slate-800 text-white shadow-xs' 
+              : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+          }`}
+        >
+          <Users className="w-3.5 h-3.5" />
+          Users &amp; Roles ({users.length})
+        </button>
+
+        <button
+          type="button"
+          onClick={() => openAndScrollTo('branding')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 flex items-center gap-1.5 ${
+            openSections['branding'] 
+              ? 'bg-amber-600 text-white shadow-xs' 
+              : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+          }`}
+        >
+          <Palette className="w-3.5 h-3.5" />
+          Branding &amp; NDA
+        </button>
+
+        <button
+          type="button"
+          onClick={() => openAndScrollTo('product-management')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 flex items-center gap-1.5 ${
+            openSections['product-management'] 
+              ? 'bg-cyan-700 text-white shadow-xs' 
+              : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+          }`}
+        >
+          <Package className="w-3.5 h-3.5" />
+          Products ({products.length})
+        </button>
+
+        <button
+          type="button"
+          onClick={() => openAndScrollTo('public-pages')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 flex items-center gap-1.5 ${
+            openSections['public-pages'] 
+              ? 'bg-indigo-600 text-white shadow-xs' 
+              : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+          }`}
+        >
+          <Globe className="w-3.5 h-3.5" />
+          Public Pages
+        </button>
       </div>
 
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-        <h2 className="text-lg font-semibold mb-4 text-slate-900">Create New User</h2>
-        <form onSubmit={handleCreateUser} className="flex flex-col gap-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Username</label>
-              <input required type="text" value={newUsername} onChange={e => setNewUsername(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-900" placeholder="Enter username" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
-              <input required type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-900" placeholder="Enter password" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
-              <select value={newRole} onChange={e => setNewRole(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-slate-900">
-                <option value="viewer">Viewer</option>
-                {user?.role === 'admin' && <option value="moderator">Moderator</option>}
-                {user?.role === 'admin' && <option value="admin">Admin</option>}
-              </select>
-            </div>
-          </div>
-          <div className="text-xs text-slate-500 bg-slate-50 p-3 rounded-md border border-slate-100">
-            <p className="font-semibold mb-1 text-slate-700">Password Requirements:</p>
-            <ul className="list-disc pl-4 space-y-0.5">
-              <li className={newPassword.length >= 12 ? 'text-emerald-600 font-medium' : ''}>At least 12 characters long</li>
-              <li className={/[A-Z]/.test(newPassword) ? 'text-emerald-600 font-medium' : ''}>At least one uppercase letter</li>
-              <li className={/\d/.test(newPassword) ? 'text-emerald-600 font-medium' : ''}>At least one number</li>
-              <li className={/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword) ? 'text-emerald-600 font-medium' : ''}>At least one special character</li>
-            </ul>
-          </div>
-          <div className="flex justify-end">
-            <Button type="submit">Create User</Button>
-          </div>
-        </form>
-      </div>
+      {/* Accordion Stack Container */}
+      <div className="space-y-4">
+        {/* Accordion 1: Document Watermarking & Delivery Hub */}
+        <AccordionSection
+          id="watermark-hub"
+          isOpen={openSections['watermark-hub']}
+          onToggle={() => toggleSection('watermark-hub')}
+          icon={Stamp}
+          iconBg="bg-blue-100"
+          iconColor="text-blue-700"
+          title="Document Watermarking & Fulfillment Hub"
+          subtitle="Associate access requests with documents and automatically generate recipient watermarked PDFs"
+          badge={
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+              Security Stamping
+            </span>
+          }
+        >
+          <DocumentWatermarkManager />
+        </AccordionSection>
 
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-        <h2 className="text-lg font-semibold mb-4 text-slate-900">Site Branding</h2>
-        <form onSubmit={handleUpdateBranding} className="space-y-6">
+        {/* Accordion 2: Security Audit Trail & Activity Log */}
+        <AccordionSection
+          id="activity-log"
+          isOpen={openSections['activity-log']}
+          onToggle={() => toggleSection('activity-log')}
+          icon={ShieldCheck}
+          iconBg="bg-purple-100"
+          iconColor="text-purple-700"
+          title="Security Audit Trail & Activity Log"
+          subtitle="Track compliance events, document changes, user sessions, and access requests (SOC 2 CC5.2 / ISO 27001)"
+          badge={
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800">
+              SOC 2 / ISO 27001
+            </span>
+          }
+        >
+          <ActivityLog />
+        </AccordionSection>
+
+        {/* Accordion 3: Analytics & Trust Center Metrics */}
+        <AccordionSection
+          id="analytics"
+          isOpen={openSections['analytics']}
+          onToggle={() => toggleSection('analytics')}
+          icon={BarChart3}
+          iconBg="bg-emerald-100"
+          iconColor="text-emerald-700"
+          title="Analytics & Trust Center Metrics"
+          subtitle="Real-time visitor counts, daily telemetry graphs, top visited modules, and document requests"
+          badge={
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
+              Live Telemetry
+            </span>
+          }
+        >
+          <AnalyticsPanel />
+        </AccordionSection>
+
+        {/* Accordion 4: User Accounts & Role Permissions */}
+        <AccordionSection
+          id="user-management"
+          isOpen={openSections['user-management']}
+          onToggle={() => toggleSection('user-management')}
+          icon={Users}
+          iconBg="bg-slate-100"
+          iconColor="text-slate-800"
+          title="User Accounts & Role Permissions"
+          subtitle="Manage administrative accounts, role levels, and granular module & product permissions"
+          badge={
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">
+              {users.length} {users.length === 1 ? 'User' : 'Users'}
+            </span>
+          }
+        >
+          <div className="space-y-6">
+            {/* Header with "+ Add New User" toggle */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">Portal Accounts ({users.length})</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Configure role-based access control (Admin, Editor, Viewer) and fine-grained permissions.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => setShowAddUser(!showAddUser)}
+                className="flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
+              >
+                {showAddUser ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                {showAddUser ? 'Cancel' : 'Add New User'}
+              </Button>
+            </div>
+
+            {/* Create User Form */}
+            {showAddUser && (
+              <form onSubmit={handleCreateUser} className="p-5 bg-slate-50/80 rounded-xl border border-slate-200/90 space-y-4 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <User className="w-4 h-4 text-blue-600" />
+                    Create New Account
+                  </h4>
+                  <span className="text-xs text-slate-500">All fields required</span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Username *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={newUsername}
+                      onChange={(e) => setNewUsername(e.target.value)}
+                      placeholder="e.g. jdoe@company.com"
+                      className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Initial Password *
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Min 12 chars, Aa1!"
+                      className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
+                    />
+                    <span className="text-[11px] text-slate-400 mt-1 block">
+                      Min 12 chars with upper, digit & symbol.
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Role Level *
+                    </label>
+                    <select
+                      value={newRole}
+                      onChange={(e) => setNewRole(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
+                    >
+                      <option value="viewer">Viewer (Granular Permissions)</option>
+                      <option value="editor">Editor (Content Management)</option>
+                      <option value="admin">Administrator (Full Access)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-slate-200/60">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowAddUser(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    size="sm"
+                  >
+                    Create Account
+                  </Button>
+                </div>
+              </form>
+            )}
+
+            {/* User List */}
+            <div className="space-y-4">
+              {users.map(u => (
+                <div key={u.id} className="border border-slate-200/90 rounded-xl p-4.5 bg-white hover:border-slate-300 transition-colors">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 font-bold uppercase shrink-0">
+                        {u.username.charAt(0)}
+                      </div>
+                      <div>
+                        <div className="font-semibold text-slate-900 text-sm flex items-center gap-2">
+                          {u.username}
+                          {u.id === user?.id && (
+                            <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 font-medium px-1.5 py-0.5 rounded">
+                              Current Session
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-2">
+                          <span className={`inline-block font-semibold uppercase text-[11px] px-2 py-0.5 rounded-full ${
+                            u.role === 'admin'
+                              ? 'bg-purple-100 text-purple-800'
+                              : u.role === 'editor'
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-slate-100 text-slate-700'
+                          }`}>
+                            {u.role}
+                          </span>
+                          <span>•</span>
+                          <span>ID #{u.id}</span>
+                        </div>
+                      </div>
+                    </div>
+                    {u.id !== user?.id && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 text-xs w-full sm:w-auto"
+                        onClick={() => setDeleteConfirm(u.id)}
+                      >
+                        <Trash2 className="w-3.5 h-3.5 mr-1" />
+                        Delete User
+                      </Button>
+                    )}
+                  </div>
+
+                  {u.role === 'viewer' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-100">
+                      <div className="bg-slate-50/80 p-3.5 rounded-lg border border-slate-200/70">
+                        <h4 className="text-xs font-semibold text-slate-900 mb-2.5 uppercase tracking-wider">
+                          Allowed Modules
+                        </h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {allModules.map(mod => (
+                            <label key={mod.id} className="flex items-start gap-2.5 text-xs cursor-pointer group">
+                              <input 
+                                type="checkbox" 
+                                checked={u.allowedModules?.includes(mod.id) || false}
+                                onChange={(e) => {
+                                  const newModules = e.target.checked 
+                                    ? [...(u.allowedModules || []), mod.id]
+                                    : (u.allowedModules || []).filter((m: string) => m !== mod.id);
+                                  handleUpdatePermissions(u.id, newModules, u.allowedProducts || []);
+                                }}
+                                className="mt-0.5 w-3.5 h-3.5 rounded border-slate-300 text-slate-900 focus:ring-slate-900 cursor-pointer"
+                              />
+                              <span className="text-slate-600 group-hover:text-slate-900 transition-colors">{mod.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="bg-slate-50/80 p-3.5 rounded-lg border border-slate-200/70">
+                        <h4 className="text-xs font-semibold text-slate-900 mb-2.5 uppercase tracking-wider">
+                          Allowed Products
+                        </h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {products.map(prod => (
+                            <label key={prod.slug} className="flex items-start gap-2.5 text-xs cursor-pointer group">
+                              <input 
+                                type="checkbox" 
+                                checked={u.allowedProducts?.includes(prod.slug) || false}
+                                onChange={(e) => {
+                                  const newProds = e.target.checked 
+                                    ? [...(u.allowedProducts || []), prod.slug]
+                                    : (u.allowedProducts || []).filter((p: string) => p !== prod.slug);
+                                  handleUpdatePermissions(u.id, u.allowedModules || [], newProds);
+                                }}
+                                className="mt-0.5 w-3.5 h-3.5 rounded border-slate-300 text-slate-900 focus:ring-slate-900 cursor-pointer"
+                              />
+                              <span className="text-slate-600 group-hover:text-slate-900 transition-colors">{prod.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </AccordionSection>
+
+        {/* Accordion 5: Site Branding & Compliance Configuration */}
+        <AccordionSection
+          id="branding"
+          isOpen={openSections['branding']}
+          onToggle={() => toggleSection('branding')}
+          icon={Palette}
+          iconBg="bg-amber-100"
+          iconColor="text-amber-800"
+          title="Site Branding & Compliance Configuration"
+          subtitle="Manage site logo, favicon, portal colors, top bar links, and legal NDA versioning"
+          badge={
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
+              Branding &amp; Legal
+            </span>
+          }
+        >
+          <form onSubmit={handleUpdateBranding} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             <div className="space-y-4">
               <div>
@@ -1683,237 +2219,209 @@ export function AdminDashboard() {
             <Button type="submit" disabled={uploading}>Save Branding Changes</Button>
           </div>
         </form>
-      </div>
+      </AccordionSection>
 
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+      {/* Accordion 6: Product Catalog Management */}
+      <AccordionSection
+        id="product-management"
+        isOpen={openSections['product-management']}
+        onToggle={() => toggleSection('product-management')}
+        icon={Package}
+        iconBg="bg-cyan-100"
+        iconColor="text-cyan-800"
+        title="Product Catalog Management"
+        subtitle="Add, edit, or configure products, country availability, categories, and live status endpoints"
+        badge={
+          <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-cyan-100 text-cyan-800">
+            {products.length} Products
+          </span>
+        }
+      >
         <div className="space-y-6">
-          {users.map(u => (
-            <div key={u.id} className="border border-slate-200 rounded-lg p-4 hover:shadow-sm transition-shadow">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-bold uppercase">
-                    {u.username.charAt(0)}
-                  </div>
-                  <div>
-                    <div className="font-semibold text-slate-900">{u.username}</div>
-                    <div className="text-xs px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full uppercase tracking-wider inline-block mt-1">{u.role}</div>
-                  </div>
-                </div>
-                {u.id !== user?.id && (
-                  <Button variant="ghost" className="text-red-600 hover:text-red-700 hover:bg-red-50 w-full sm:w-auto" onClick={() => setDeleteConfirm(u.id)}>
-                    Delete User
-                  </Button>
-                )}
-              </div>
-
-              {u.role === 'viewer' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4 pt-4 border-t border-slate-100">
-                  <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
-                    <h4 className="text-sm font-semibold text-slate-900 mb-3">Allowed Modules</h4>
-                    <div className="space-y-2.5">
-                      {allModules.map(mod => (
-                        <label key={mod.id} className="flex items-start gap-3 text-sm cursor-pointer group">
-                          <input 
-                            type="checkbox" 
-                            checked={u.allowedModules?.includes(mod.id) || false}
-                            onChange={(e) => {
-                              const newModules = e.target.checked 
-                                ? [...(u.allowedModules || []), mod.id]
-                                : (u.allowedModules || []).filter((m: string) => m !== mod.id);
-                              handleUpdatePermissions(u.id, newModules, u.allowedProducts || []);
-                            }}
-                            className="mt-0.5 w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900 cursor-pointer"
-                          />
-                          <span className="text-slate-700 group-hover:text-slate-900 transition-colors">{mod.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
-                    <h4 className="text-sm font-semibold text-slate-900 mb-3">Allowed Products</h4>
-                    <div className="space-y-2.5">
-                      {products.map(prod => (
-                        <label key={prod.slug} className="flex items-start gap-3 text-sm cursor-pointer group">
-                          <input 
-                            type="checkbox" 
-                            checked={u.allowedProducts?.includes(prod.slug) || false}
-                            onChange={(e) => {
-                              const newProds = e.target.checked 
-                                ? [...(u.allowedProducts || []), prod.slug]
-                                : (u.allowedProducts || []).filter((p: string) => p !== prod.slug);
-                              handleUpdatePermissions(u.id, u.allowedModules || [], newProds);
-                            }}
-                            className="mt-0.5 w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900 cursor-pointer"
-                          />
-                          <span className="text-slate-700 group-hover:text-slate-900 transition-colors">{prod.name}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-4 border-b border-slate-100">
+            <div>
+              <h3 className="text-base font-semibold text-slate-900">Products &amp; Solutions ({products.length})</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Filter by country or category, and manage availability across regional portals.</p>
             </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">Product Management</h2>
-            <p className="text-sm text-slate-500 mt-1">Add, edit, or remove products from the platform.</p>
+            <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+              <input
+                type="text"
+                placeholder="Search products..."
+                value={productSearchQuery}
+                onChange={(e) => setProductSearchQuery(e.target.value)}
+                className="w-full md:w-48 px-3 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs"
+              />
+              <select
+                value={productCountryFilter}
+                onChange={(e) => setProductCountryFilter(e.target.value)}
+                className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs bg-white"
+              >
+                <option value="all">All Countries</option>
+                {COUNTRIES.map(c => (
+                  <option key={c.code} value={c.code}>{c.flag} {c.code.toUpperCase()}</option>
+                ))}
+              </select>
+              <select
+                value={productCategoryFilter}
+                onChange={(e) => setProductCategoryFilter(e.target.value)}
+                className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs bg-white"
+              >
+                <option value="all">All Categories</option>
+                {categories.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+              <Button size="sm" onClick={handleAddProductClick} className="flex items-center gap-1.5 whitespace-nowrap text-xs">
+                <Plus className="w-3.5 h-3.5" />
+                Add Product
+              </Button>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-            <input
-              type="text"
-              placeholder="Search products..."
-              value={productSearchQuery}
-              onChange={(e) => setProductSearchQuery(e.target.value)}
-              className="w-full md:w-64 px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
-            />
-            <select
-              value={productCountryFilter}
-              onChange={(e) => setProductCountryFilter(e.target.value)}
-              className="px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm bg-white"
-            >
-              <option value="all">All Countries</option>
-              {COUNTRIES.map(c => (
-                <option key={c.code} value={c.code}>{c.flag} {c.code.toUpperCase()}</option>
-              ))}
-            </select>
-            <select
-              value={productCategoryFilter}
-              onChange={(e) => setProductCategoryFilter(e.target.value)}
-              className="px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm bg-white"
-            >
-              <option value="all">All Categories</option>
-              {categories.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
-            <Button onClick={handleAddProductClick} className="flex items-center gap-2 whitespace-nowrap">
-              <Plus className="w-4 h-4" />
-              Add Product
-            </Button>
-          </div>
-        </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {products
-            .filter(p => {
-              const matchesSearch = p.name.toLowerCase().includes(productSearchQuery.toLowerCase()) || 
-                                    p.category.toLowerCase().includes(productSearchQuery.toLowerCase());
-              const matchesCountry = productCountryFilter === 'all' || (p.countries && p.countries.includes(productCountryFilter));
-              const matchesCategory = productCategoryFilter === 'all' || p.category === productCategoryFilter;
-              return matchesSearch && matchesCountry && matchesCategory;
-            })
-            .map((product) => (
-            <div key={product.slug} className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col justify-between hover:shadow-sm transition-shadow relative group">
-              <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all z-10">
-                <button 
-                  onClick={() => handleEditProductClick(product)}
-                  className="p-1.5 bg-white border border-slate-200 rounded-md text-slate-400 hover:text-blue-600 hover:border-blue-200 shadow-sm"
-                  title="Edit Product"
-                >
-                  <Edit2 className="w-3.5 h-3.5" />
-                </button>
-                <button 
-                  onClick={() => setDeleteProductConfirm(product.slug)}
-                  className="p-1.5 bg-white border border-slate-200 rounded-md text-slate-400 hover:text-red-600 hover:border-red-200 shadow-sm"
-                  title="Delete Product"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-              <div>
-                <div className="flex justify-between items-start mb-2">
-                  <div 
-                    className="w-3 h-3 rounded-full mt-1 shrink-0" 
-                    style={{ backgroundColor: product.color }}
-                  />
-                  <div className="flex items-center gap-2">
-                    <a 
-                      href={product.status_url} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-xs font-medium text-blue-600 hover:text-blue-800 flex items-center gap-1 text-right"
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {products
+              .filter(p => {
+                const matchesSearch = p.name.toLowerCase().includes(productSearchQuery.toLowerCase()) || 
+                                      p.category.toLowerCase().includes(productSearchQuery.toLowerCase());
+                const matchesCountry = productCountryFilter === 'all' || (p.countries && p.countries.includes(productCountryFilter));
+                const matchesCategory = productCategoryFilter === 'all' || p.category === productCategoryFilter;
+                return matchesSearch && matchesCountry && matchesCategory;
+              })
+              .map((product) => (
+              <div key={product.slug} className="bg-white border border-slate-200 rounded-xl p-4.5 flex flex-col justify-between hover:border-slate-300 transition-colors relative group">
+                <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-all z-10">
+                  <button 
+                    onClick={() => handleEditProductClick(product)}
+                    className="p-1.5 bg-white border border-slate-200 rounded-md text-slate-400 hover:text-blue-600 hover:border-blue-200 shadow-2xs"
+                    title="Edit Product"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+                  <button 
+                    onClick={() => setDeleteProductConfirm(product.slug)}
+                    className="p-1.5 bg-white border border-slate-200 rounded-md text-slate-400 hover:text-red-600 hover:border-red-200 shadow-2xs"
+                    title="Delete Product"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div>
+                  <div className="flex justify-between items-start mb-2">
+                    <div 
+                      className="w-3 h-3 rounded-full mt-1 shrink-0" 
+                      style={{ backgroundColor: product.color }}
+                    />
+                    <div className="flex items-center gap-2">
+                      <a 
+                        href={product.status_url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-xs font-medium text-blue-600 hover:text-blue-800 flex items-center gap-1 text-right"
+                      >
+                        Status Page <ExternalLink className="w-3 h-3 shrink-0" />
+                      </a>
+                    </div>
+                  </div>
+                  <h4 className="font-semibold text-slate-900 pr-12 text-sm">
+                    <Link
+                      to={`/security-overview/${product.slug}`}
+                      onClick={() => setLastSelectedProduct(product.slug)}
+                      className="hover:text-blue-600 hover:underline transition-colors"
+                      title={`View ${product.name} Security Overview`}
                     >
-                      Status Page <ExternalLink className="w-3 h-3 shrink-0" />
-                    </a>
-                  </div>
+                      {product.name}
+                    </Link>
+                  </h4>
+                  <p className="text-xs text-slate-500 uppercase tracking-wider mt-1">{product.category}</p>
+                  {product.countries && product.countries.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-3">
+                      {product.countries.map((c: string) => {
+                        const countryObj = COUNTRIES.find(country => country.code === c);
+                        return countryObj ? (
+                          <span key={c} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200" title={countryObj.name}>
+                            {countryObj.flag} {countryObj.code.toUpperCase()}
+                          </span>
+                        ) : null;
+                      })}
+                    </div>
+                  )}
                 </div>
-                <h4 className="font-semibold text-slate-900 pr-12">{product.name}</h4>
-                <p className="text-xs text-slate-600 uppercase tracking-wider mt-1">{product.category}</p>
-                {product.countries && product.countries.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-3">
-                    {product.countries.map((c: string) => {
-                      const countryObj = COUNTRIES.find(country => country.code === c);
-                      return countryObj ? (
-                        <span key={c} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200" title={countryObj.name}>
-                          {countryObj.flag} {countryObj.code.toUpperCase()}
-                        </span>
-                      ) : null;
-                    })}
-                  </div>
-                )}
+              </div>
+            ))}
+            {products.filter(p => {
+                const matchesSearch = p.name.toLowerCase().includes(productSearchQuery.toLowerCase()) || 
+                                      p.category.toLowerCase().includes(productSearchQuery.toLowerCase());
+                const matchesCountry = productCountryFilter === 'all' || (p.countries && p.countries.includes(productCountryFilter));
+                const matchesCategory = productCategoryFilter === 'all' || p.category === productCategoryFilter;
+                return matchesSearch && matchesCountry && matchesCategory;
+              }).length === 0 && (
+              <div className="col-span-full p-8 text-center text-slate-500 border border-dashed border-slate-300 rounded-xl">
+                {products.length === 0 ? "No products found. Add a product to get started." : "No products match your search or filter."}
+              </div>
+            )}
+          </div>
+        </div>
+      </AccordionSection>
+
+      {/* Accordion 7: Public Page Visibility */}
+      <AccordionSection
+        id="public-pages"
+        isOpen={openSections['public-pages']}
+        onToggle={() => toggleSection('public-pages')}
+        icon={Globe}
+        iconBg="bg-indigo-100"
+        iconColor="text-indigo-800"
+        title="Public Pages & Visitor Visibility"
+        subtitle="Configure which core modules and product pages are publicly accessible without authentication"
+        badge={
+          <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-800">
+            {publicPages.length} Enabled
+          </span>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-slate-500">
+            Check the modules and products that unauthenticated visitors are allowed to view on the Trust Center.
+          </p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-200/70">
+              <h4 className="text-xs font-semibold text-slate-900 uppercase tracking-wider mb-3">Core Modules</h4>
+              <div className="space-y-2.5">
+                {allModules.map(mod => (
+                  <label key={mod.id} className="flex items-start gap-3 text-sm cursor-pointer group">
+                    <input 
+                      type="checkbox" 
+                      checked={publicPages.includes(mod.id)}
+                      onChange={(e) => togglePublicPage(mod.id, e.target.checked)}
+                      className="mt-0.5 w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900 cursor-pointer"
+                    />
+                    <span className="text-slate-700 group-hover:text-slate-900 transition-colors">{mod.label}</span>
+                  </label>
+                ))}
               </div>
             </div>
-          ))}
-          {products.filter(p => {
-              const matchesSearch = p.name.toLowerCase().includes(productSearchQuery.toLowerCase()) || 
-                                    p.category.toLowerCase().includes(productSearchQuery.toLowerCase());
-              const matchesCountry = productCountryFilter === 'all' || (p.countries && p.countries.includes(productCountryFilter));
-              const matchesCategory = productCategoryFilter === 'all' || p.category === productCategoryFilter;
-              return matchesSearch && matchesCountry && matchesCategory;
-            }).length === 0 && (
-            <div className="col-span-full p-8 text-center text-slate-500 border border-dashed border-slate-300 rounded-xl">
-              {products.length === 0 ? "No products found. Add a product to get started." : "No products match your search or filter."}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-        <h2 className="text-lg font-semibold mb-2 text-slate-900">Public Pages</h2>
-        <p className="text-sm text-slate-500 mb-6">Select which pages are visible to unauthenticated visitors.</p>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
-            <h4 className="text-sm font-semibold text-slate-900 mb-3">Core Modules</h4>
-            <div className="space-y-2.5">
-              {allModules.map(mod => (
-                <label key={mod.id} className="flex items-start gap-3 text-sm cursor-pointer group">
-                  <input 
-                    type="checkbox" 
-                    checked={publicPages.includes(mod.id)}
-                    onChange={(e) => togglePublicPage(mod.id, e.target.checked)}
-                    className="mt-0.5 w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900 cursor-pointer"
-                  />
-                  <span className="text-slate-700 group-hover:text-slate-900 transition-colors">{mod.label}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-          
-          <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
-            <h4 className="text-sm font-semibold text-slate-900 mb-3">Product Pages</h4>
-            <div className="space-y-2.5">
-              {products.map(prod => (
-                <label key={`product-${prod.slug}`} className="flex items-start gap-3 text-sm cursor-pointer group">
-                  <input 
-                    type="checkbox" 
-                    checked={publicPages.includes(`product-${prod.slug}`)}
-                    onChange={(e) => togglePublicPage(`product-${prod.slug}`, e.target.checked)}
-                    className="mt-0.5 w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900 cursor-pointer"
-                  />
-                  <span className="text-slate-700 group-hover:text-slate-900 transition-colors">{prod.name}</span>
-                </label>
-              ))}
+            
+            <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-200/70">
+              <h4 className="text-xs font-semibold text-slate-900 uppercase tracking-wider mb-3">Product Pages</h4>
+              <div className="space-y-2.5">
+                {products.map(prod => (
+                  <label key={`product-${prod.slug}`} className="flex items-start gap-3 text-sm cursor-pointer group">
+                    <input 
+                      type="checkbox" 
+                      checked={publicPages.includes(`product-${prod.slug}`)}
+                      onChange={(e) => togglePublicPage(`product-${prod.slug}`, e.target.checked)}
+                      className="mt-0.5 w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900 cursor-pointer"
+                    />
+                    <span className="text-slate-700 group-hover:text-slate-900 transition-colors">{prod.name}</span>
+                  </label>
+                ))}
+              </div>
             </div>
           </div>
         </div>
+      </AccordionSection>
       </div>
-
     </div>
   );
 }

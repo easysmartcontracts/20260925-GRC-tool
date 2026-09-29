@@ -107,7 +107,7 @@ export function RequestAccessModal({ isOpen, onClose, target }: RequestAccessMod
     }
 
     if (!legal.agreeMnda) {
-      setValidationError('You must accept the Mutual Non-Disclosure Agreement (NDA) with the required opt-in before requesting a copy.');
+      setValidationError('You must accept the Non-Disclosure Agreement (NDA) with the required opt-in before requesting a copy.');
       return;
     }
 
@@ -132,6 +132,27 @@ export function RequestAccessModal({ isOpen, onClose, target }: RequestAccessMod
           user_email: formData.businessEmail
         })
       });
+
+      // Record access request in activity log and access_requests registry
+      fetch('/api/public/access-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          documentName: documentTitle,
+          documentType: target?.documentType || 'compliance',
+          productSlug: target?.productSlug || null,
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          businessEmail: formData.businessEmail,
+          company: formData.company,
+          jobTitle: formData.jobTitle,
+          relationship: formData.relationship,
+          purpose: formData.purpose,
+          comments: formData.comments,
+          ndaAccepted: legal.agreeMnda,
+          ndaAcceptedAt: legal.ndaAcceptedAt || new Date().toISOString()
+        })
+      }).catch((e) => console.error('Failed to log access request:', e));
     } catch (err) {
       console.error('Failed to track request metric:', err);
     }
@@ -164,11 +185,11 @@ Applicable NDA Document: ${ndaLink}
 Accepted by: ${formData.firstName.trim()} ${formData.lastName.trim()} (${formData.businessEmail.trim()})
 Company / Organization: ${formData.company.trim()}
 Accepted on: ${acceptanceTimestamp}
-Opt-in Confirmation: Requester explicitly confirmed the required opt-in and accepted the Mutual Non-Disclosure Agreement prior to requesting this document/policy.
+Opt-in Confirmation: Requester explicitly confirmed the required opt-in and accepted the Non-Disclosure Agreement (NDA) prior to requesting this document/policy.
 Applicability Notice: The requester understands that all disclosed documents, audit reports, and policies are strictly confidential under the terms of the accepted NDA.
 
 --- LEGAL & COMPLIANCE ACKNOWLEDGMENTS ---
-[X] Mutual Non-Disclosure Agreement (NDA): Accepted and applicable
+[X] Non-Disclosure Agreement (NDA): Accepted and applicable
 [X] Watermark Notice: Requester acknowledges all documents will be watermarked with personal and company details and may only be used solely for the stated purpose.
 [X] Authorization Confirmation: Requester confirms authority to receive confidential information on behalf of their organization.
 
@@ -469,7 +490,7 @@ Submitted via Björn Lunden Trust Center on ${new Date().toLocaleDateString('en-
                             }}
                             className="font-semibold text-blue-700 underline hover:text-blue-900 inline-flex items-center gap-0.5"
                           >
-                            Mutual Non-Disclosure Agreement <ExternalLink className="w-3 h-3" />
+                            Non-Disclosure Agreement (NDA) <ExternalLink className="w-3 h-3" />
                           </a>{' '}
                           <span className="text-red-500 font-semibold">*</span>
                         </span>

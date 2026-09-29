@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Shield, FileText, Lock, ExternalLink, Edit2, Check, X, Plus, Trash2, AlertCircle } from 'lucide-react';
+import { Shield, FileText, Lock, ExternalLink, Edit2, Check, X, Plus, Trash2, AlertCircle, ChevronRight } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import { ConfirmationModal } from '../components/ui/ConfirmationModal';
 import { useAuth } from '../contexts/AuthContext';
 import { useRequestAccess } from '../contexts/RequestAccessContext';
 import { useCountry } from '../hooks/useCountry';
 import { COUNTRIES } from '../constants';
+import { setLastSelectedProduct } from '../utils/productSelection';
 
 type Product = {
   slug: string;
@@ -861,7 +862,17 @@ export function Dashboard() {
                       </a>
                     </div>
                   </div>
-                  <h4 className="font-semibold text-slate-900 pr-12">{product.name}</h4>
+                  <h4 className="font-semibold text-slate-900 pr-12">
+                    <Link
+                      to={`/security-overview/${product.slug}`}
+                      onClick={() => setLastSelectedProduct(product.slug)}
+                      className="hover:text-blue-600 transition-colors inline-flex items-center gap-1 group/pname"
+                      title={`View ${product.name} Security Overview`}
+                    >
+                      <span className="hover:underline">{product.name}</span>
+                      <ChevronRight className="w-3.5 h-3.5 text-blue-500 opacity-0 group-hover/pname:opacity-100 transition-opacity shrink-0" />
+                    </Link>
+                  </h4>
                   <p className="text-xs text-slate-600 uppercase tracking-wider mt-1">{product.category}</p>
                   {product.countries && product.countries.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-3">

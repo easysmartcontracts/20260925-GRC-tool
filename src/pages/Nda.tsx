@@ -1,19 +1,25 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ShieldCheck, Printer, ExternalLink, ArrowLeft, Calendar, FileText, CheckCircle2, Lock } from 'lucide-react';
+import { ShieldCheck, Printer, ExternalLink, ArrowLeft, Calendar, FileText, CheckCircle2, Lock, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/Button';
 
 export function Nda() {
   const { siteSettings } = useAuth();
+  const [showPrintHelper, setShowPrintHelper] = useState(false);
 
   const handlePrint = () => {
-    window.print();
+    const printUrl = '/api/public/nda-whitepaper?print=true';
+    if (window.self !== window.top) {
+      setShowPrintHelper(true);
+    } else {
+      window.open(printUrl, '_blank');
+    }
   };
 
   const defaultContent = `
-    <h2>Mutual Non-Disclosure Agreement (NDA)</h2>
-    <p>This Mutual Non-Disclosure Agreement ("Agreement") governs the disclosure of confidential, proprietary, security, and compliance documentation by <strong>Björn Lunden AB</strong> and its affiliates ("Disclosing Party") to the requesting organization and its representatives ("Receiving Party").</p>
+    <h2>Non-Disclosure Agreement (NDA)</h2>
+    <p>This Non-Disclosure Agreement ("Agreement") governs the disclosure of confidential, proprietary, security, and compliance documentation by <strong>Björn Lunden AB</strong> and its affiliates ("Disclosing Party") to the requesting organization and its representatives ("Receiving Party").</p>
     
     <h3>1. Purpose</h3>
     <p>The Receiving Party has requested access to confidential documentation, including but not limited to third-party audit reports (such as ISAE 3402, SOC 2, ISO 27001), penetration testing summaries, data protection impact assessments (DPIAs), architectural specifications, and internal security policies via the Björn Lunden Trust Center ("Purpose").</p>
@@ -57,21 +63,75 @@ export function Nda() {
               href={siteSettings.nda_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
             >
               External Document <ExternalLink className="w-3.5 h-3.5" />
             </a>
           )}
-          <Button
-            variant="outline"
-            size="sm"
+          <button
             onClick={handlePrint}
-            className="flex items-center gap-1.5 text-xs"
+            className="flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-sm font-semibold transition-all shadow-sm w-fit group"
+            title="Print overview or save as a PDF"
           >
-            <Printer className="w-3.5 h-3.5" /> Print / Save PDF
-          </Button>
+            <Printer className="w-4 h-4 text-slate-400 group-hover:text-white transition-colors" />
+            Print / Save PDF
+          </button>
         </div>
       </div>
+
+      {/* Print Helper Modal */}
+      {showPrintHelper && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 print:hidden">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Printer className="w-5 h-5 text-blue-500" />
+                Print / Save PDF
+              </h3>
+              <button 
+                onClick={() => setShowPrintHelper(false)}
+                className="p-1 hover:bg-slate-100 rounded-lg transition-colors text-slate-400 hover:text-slate-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-slate-600 leading-relaxed">
+                Because this live preview runs inside a secure, sandboxed browser iframe, standard browser print menus are blocked by your browser's security policies.
+              </p>
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 text-xs text-blue-800 space-y-1.5 font-medium leading-relaxed">
+                <p className="font-bold flex items-center gap-1 text-blue-900">💡 What will happen next:</p>
+                <p>1. We will open the official NDA in a clean, isolated browser tab.</p>
+                <p>2. A styled PDF print-preview will instantly trigger automatically.</p>
+                <p>3. You can choose to print hardcopy or click <strong>Save as PDF</strong>.</p>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-slate-100 flex justify-end gap-3 bg-slate-50/50 text-xs">
+              <button 
+                onClick={() => setShowPrintHelper(false)}
+                className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
+              >
+                Cancel
+              </button>
+              <a 
+                href="/api/public/nda-whitepaper?print=true"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setShowPrintHelper(false);
+                  window.open('/api/public/nda-whitepaper?print=true', '_blank');
+                }}
+                className="px-4 py-2 text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-md transition-colors shadow-sm inline-flex items-center gap-1.5"
+              >
+                Open in New Tab & Print
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Hero Header Card */}
       <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200 shadow-sm print:border-none print:shadow-none print:p-0">
@@ -97,7 +157,7 @@ export function Nda() {
                 </span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-                Mutual Non-Disclosure Agreement (NDA)
+                Non-Disclosure Agreement (NDA)
               </h1>
               <p className="text-sm text-slate-600 mt-1 max-w-2xl">
                 Official terms and confidentiality conditions required to inspect, request, and receive restricted security documentation, policies, and audit reports from Björn Lunden.

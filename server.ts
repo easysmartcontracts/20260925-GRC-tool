@@ -7,6 +7,7 @@ import { pool, initDb } from './server/db.js';
 import authRoutes from './server/routes/auth.js';
 import adminRoutes from './server/routes/admin.js';
 import { escapeHtml, sanitizeUrl } from './server/utils/html.js';
+import { logActivity } from './server/utils/activity.js';
 
 async function startServer() {
   const app = express();
@@ -51,6 +52,87 @@ async function startServer() {
   app.use('/api', apiLimiter);
   app.use('/api/auth', authRoutes);
   app.use('/api/admin', adminRoutes);
+
+  // Access requests submission endpoint
+  app.post('/api/public/access-requests', async (req, res) => {
+    try {
+      const {
+        documentName,
+        documentType,
+        productSlug,
+        firstName,
+        lastName,
+        businessEmail,
+        company,
+        jobTitle,
+        relationship,
+        purpose,
+        comments,
+        ndaAccepted,
+        ndaAcceptedAt
+      } = req.body;
+
+      if (!documentName || !firstName || !lastName || !businessEmail || !company) {
+        return res.status(400).json({ error: 'Missing required request fields' });
+      }
+
+      const requesterFullName = `${firstName.trim()} ${lastName.trim()}`;
+      const email = businessEmail.trim();
+      const comp = company.trim();
+      const rawIp = req.ip || req.socket.remoteAddress || '';
+      const ip = rawIp.replace(/^::ffff:/, '');
+
+      const [result]: any = await pool.query(`
+        INSERT INTO access_requests (
+          document_name, document_type, product_slug, requester_name, business_email,
+          company, job_title, relationship, purpose, comments, nda_accepted, nda_accepted_at,
+          status, ip_address
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+      `, [
+        documentName.trim(),
+        documentType || 'compliance',
+        productSlug || null,
+        requesterFullName,
+        email,
+        comp,
+        jobTitle ? jobTitle.trim() : null,
+        relationship || 'Other',
+        purpose ? purpose.trim() : '',
+        comments ? comments.trim() : null,
+        ndaAccepted ? 1 : 0,
+        ndaAcceptedAt || new Date().toISOString(),
+        ip
+      ]);
+
+      await logActivity({
+        type: 'access_request',
+        action: 'request_submitted',
+        title: `Access requested for '${documentName.trim()}' by ${requesterFullName} (${comp})`,
+        actor: email,
+        target_type: 'document',
+        target_name: documentName.trim(),
+        status: 'pending',
+        ip_address: ip,
+        details: {
+          requestId: result.insertId,
+          documentName: documentName.trim(),
+          requester: requesterFullName,
+          email,
+          company: comp,
+          jobTitle,
+          relationship,
+          purpose,
+          nda_accepted: !!ndaAccepted,
+          nda_accepted_at: ndaAcceptedAt
+        }
+      });
+
+      res.json({ success: true, id: result.insertId });
+    } catch (err: any) {
+      console.error('Error saving access request:', err);
+      res.status(500).json({ error: 'Failed to record access request' });
+    }
+  });
 
   app.get('/api/public/pages', async (req, res) => {
     try {
@@ -763,11 +845,12 @@ async function startServer() {
           <table>
             <thead>
               <tr>
-                <th style="width: 25%;">Identity</th>
-                <th style="width: 15%;">Location</th>
-                <th style="width: 20%;">Nature of Processing</th>
-                <th style="width: 20%;">Purpose</th>
-                <th style="width: 20%;">Certifications</th>
+                <th style="width: 20%;">Subprocessor &amp; Contact</th>
+                <th style="width: 14%;">Purposes</th>
+                <th style="width: 18%;">Categories of Data</th>
+                <th style="width: 15%;">Recipients &amp; Transfers</th>
+                <th style="width: 13%;">Retention</th>
+                <th style="width: 20%;">Security Measures (TOMs)</th>
               </tr>
             </thead>
             <tbody>
@@ -775,15 +858,24 @@ async function startServer() {
                 <tr>
                   <td>
                     <strong>${escapeHtml(sub.name)}</strong>
-                    ${sub.contact_details ? `<div style="font-size: 8pt; color: var(--text-muted); margin-top: 4px;">${escapeHtml(sub.contact_details)}</div>` : ''}
+                    ${sub.contact_details ? `<div style="font-size: 8pt; color: var(--text-muted); margin-top: 3px;">${escapeHtml(sub.contact_details)}</div>` : ''}
+                    ${sub.org_number ? `<div style="font-size: 7.5pt; color: var(--text-muted); margin-top: 2px;">Org: ${escapeHtml(sub.org_number)}</div>` : ''}
                   </td>
                   <td>
-                    ${escapeHtml(sub.region)}
-                    ${sub.countries && sub.countries.length > 0 ? `<div style="font-size: 8pt; color: var(--text-muted); margin-top: 2px;">${escapeHtml(sub.countries.join(', ')).toUpperCase()}</div>` : ''}
+                    ${escapeHtml(sub.purpose || 'Not specified')}
+                    ${sub.nature_of_processing ? `<div style="font-size: 7.5pt; color: var(--text-muted); margin-top: 3px;"><em>${escapeHtml(sub.nature_of_processing)}</em></div>` : ''}
                   </td>
-                  <td>${escapeHtml(sub.nature_of_processing || sub.category || 'Not specified')}</td>
-                  <td>${escapeHtml(sub.purpose || 'Not specified')}</td>
-                  <td>${sub.certifications ? escapeHtml(sub.certifications) : '<span style="color: #94a3b8; font-style: italic;">None</span>'}</td>
+                  <td>${sub.data_categories ? escapeHtml(sub.data_categories) : '<span style="color: #94a3b8; font-style: italic;">Standard system telemetry</span>'}</td>
+                  <td>
+                    <div><strong>Region:</strong> ${escapeHtml(sub.region)}</div>
+                    ${sub.transfers ? `<div style="font-size: 8pt; color: var(--text-muted); margin-top: 3px;">${escapeHtml(sub.transfers)}</div>` : ''}
+                    ${sub.recipients ? `<div style="font-size: 8pt; color: var(--text-muted); margin-top: 3px;"><strong>Recipients:</strong> ${escapeHtml(sub.recipients)}</div>` : ''}
+                  </td>
+                  <td>${sub.retention ? escapeHtml(sub.retention) : '<span style="color: #94a3b8; font-style: italic;">Duration of contract</span>'}</td>
+                  <td>
+                    ${sub.security_measures ? `<div style="font-size: 8pt;">${escapeHtml(sub.security_measures)}</div>` : 'Technical &amp; organizational security controls.'}
+                    ${sub.certifications ? `<div style="font-size: 7.5pt; color: #166534; font-weight: 600; margin-top: 4px;">🛡️ ${escapeHtml(sub.certifications)}</div>` : ''}
+                  </td>
                 </tr>
               `).join('')}
             </tbody>
@@ -809,6 +901,348 @@ async function startServer() {
     } catch (err) {
       console.error('Error generating product whitepaper:', err);
       res.status(500).send('<h1>Internal Server Error</h1><p>Failed to generate white paper.</p>');
+    }
+  });
+
+  app.get('/api/public/nda-whitepaper', async (req, res) => {
+    try {
+      // fetch custom dashboard/site branding settings
+      const [settingsRows]: any = await pool.query('SELECT "key", "value" FROM dashboard_settings');
+      const settings: any = {};
+      for (const s of settingsRows as any[]) {
+        try {
+          settings[s.key] = JSON.parse(s.value);
+        } catch (e) {
+          settings[s.key] = s.value;
+        }
+      }
+
+      const [currentNda]: any = await pool.query('SELECT * FROM nda_versions WHERE is_current = 1 LIMIT 1');
+      const nda = currentNda?.[0] || null;
+
+      const siteName = settings.site_name || 'Bjorn Lunden';
+      const siteLogo = settings.site_logo || '';
+      const version = nda?.version || settings.nda_version || '1.1.0';
+      const effectiveDate = nda?.effective_date || settings.nda_effective_date || '2025-01-01';
+      const formattedDate = new Date(effectiveDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+      const generatedDate = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+      
+      const ndaBodyHtml = nda?.content || settings.nda_notice || `
+        <h2>Non-Disclosure Agreement (NDA)</h2>
+        <p>This Non-Disclosure Agreement ("Agreement") governs the disclosure of confidential, proprietary, security, and compliance documentation by <strong>${escapeHtml(siteName)}</strong> and its affiliates ("Disclosing Party") to the requesting organization and its representatives ("Receiving Party").</p>
+        
+        <h3>1. Purpose</h3>
+        <p>The Receiving Party has requested access to confidential documentation, including but not limited to third-party audit reports (such as ISAE 3402, SOC 2, ISO 27001), penetration testing summaries, data protection impact assessments (DPIAs), architectural specifications, and internal security policies via the Trust Center ("Purpose").</p>
+        
+        <h3>2. Confidential Information</h3>
+        <p>Confidential Information includes all non-public technical, operational, organizational, and compliance information disclosed through the Trust Center, whether in tangible, electronic, or visual form. All copies of policies, risk assessments, and audit reports are strictly Confidential Information.</p>
+        
+        <h3>3. Obligations of Receiving Party</h3>
+        <p>The Receiving Party agrees to:</p>
+        <ul>
+          <li>Protect and preserve the confidentiality of the Confidential Information using at least reasonable care and no less than the care used for its own confidential information.</li>
+          <li>Use Confidential Information solely for evaluating ${escapeHtml(siteName)}'s security, privacy, and compliance posture for the stated Purpose.</li>
+          <li>Restrict access strictly to employees, contractors, and advisors who strictly require access for the Purpose and are bound by confidentiality obligations at least as restrictive as this Agreement.</li>
+          <li>Not disclose, publish, reverse-engineer, distribute, or make available any Confidential Information to third parties without prior written consent.</li>
+        </ul>
+        
+        <h3>4. Electronic Watermarking &amp; Traceability</h3>
+        <p>The Receiving Party acknowledges that requested documents and policies are electronically watermarked with recipient identifiers (e.g. name, email, company, and timestamp). Tampering with or altering watermarks is strictly prohibited.</p>
+        
+        <h3>5. Duration</h3>
+        <p>Confidentiality obligations under this Agreement shall remain in effect for a period of three (3) years from the date of disclosure, or perpetually for information constituting trade secrets under applicable law.</p>
+        
+        <h3>6. Governing Law</h3>
+        <p>This Agreement is governed by and construed in accordance with the laws of Sweden. Any disputes arising in connection with this Agreement shall be settled by the competent courts of Sweden.</p>
+      `;
+
+      const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="paper-size" content="A4">
+  <title>Non-Disclosure Agreement (NDA) - ${escapeHtml(siteName)} Trust Center</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --primary: #1B3A6B;
+      --primary-light: #2c5282;
+      --accent-blue: #D0D8E4;
+      --text-dark: #0f172a;
+      --text-muted: #475569;
+      --border-color: #D0D8E4;
+      --bg-light: #F4F7FB;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: #f1f5f9;
+      color: var(--text-dark);
+      font-family: 'Inter', sans-serif;
+      font-size: 10.5pt;
+      line-height: 1.6;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    .screen-wrapper {
+      max-width: 860px;
+      margin: 40px auto;
+      background: transparent;
+      padding: 0;
+    }
+
+    .screen-controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      gap: 16px;
+    }
+
+    .btn-back {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      background-color: #ffffff;
+      color: var(--text-dark);
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 9pt;
+      font-weight: 600;
+      text-decoration: none;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+      transition: all 0.2s;
+    }
+    .btn-back:hover { background-color: #f8fafc; border-color: #94a3b8; }
+
+    .btn-print {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 20px;
+      background-color: var(--primary);
+      color: #ffffff;
+      border: none;
+      border-radius: 6px;
+      font-size: 9pt;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 2px 4px rgba(27,58,107,0.25);
+      transition: background 0.2s, transform 0.1s;
+    }
+    .btn-print:hover { background-color: #142a4e; transform: translateY(-1px); }
+
+    .paper-page {
+      background: #ffffff;
+      padding: 60px 65px;
+      border-radius: 8px;
+      box-shadow: 0 10px 30px -5px rgba(0,0,0,0.1), 0 0 1px rgba(0,0,0,0.1);
+      position: relative;
+    }
+
+    .print-official-header { display: none; }
+
+    .cover-band {
+      background-color: var(--bg-light);
+      border-left: 5px solid var(--primary);
+      padding: 24px 28px;
+      margin-bottom: 30px;
+      border-radius: 4px;
+    }
+
+    .cover-band h1 {
+      font-size: 22pt;
+      font-weight: 700;
+      color: var(--primary);
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+    }
+
+    .meta-badge-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 8.5pt;
+      color: var(--text-muted);
+      margin-top: 6px;
+      flex-wrap: wrap;
+    }
+
+    .meta-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      background-color: #e2e8f0;
+      color: #334155;
+      font-weight: 600;
+      border-radius: 4px;
+      font-size: 8pt;
+    }
+
+    .meta-badge.active {
+      background-color: #dcfce7;
+      color: #166534;
+      border: 1px solid #bbf7d0;
+    }
+
+    .legal-content {
+      color: #1e293b;
+      font-size: 10pt;
+      line-height: 1.7;
+    }
+
+    .legal-content h2 {
+      font-size: 14pt;
+      color: var(--primary);
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 6px;
+      margin-top: 24px;
+      margin-bottom: 12px;
+    }
+
+    .legal-content h3 {
+      font-size: 11.5pt;
+      color: var(--text-dark);
+      margin-top: 18px;
+      margin-bottom: 6px;
+    }
+
+    .legal-content p {
+      margin-bottom: 12px;
+    }
+
+    .legal-content ul, .legal-content ol {
+      margin-left: 24px;
+      margin-bottom: 14px;
+    }
+
+    .legal-content li {
+      margin-bottom: 6px;
+    }
+
+    .legal-footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 8pt;
+      color: var(--text-muted);
+    }
+
+    @media print {
+      @page {
+        size: A4;
+        margin: 18mm 16mm 18mm 16mm;
+      }
+      body {
+        background-color: #ffffff !important;
+        font-size: 9.5pt;
+      }
+      .screen-controls { display: none !important; }
+      .screen-wrapper { margin: 0 !important; max-width: 100% !important; }
+      .paper-page {
+        padding: 0 !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+      }
+      .print-official-header {
+        display: block !important;
+        margin-bottom: 16px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--border-color);
+        font-size: 8pt;
+        color: var(--text-muted);
+        display: flex !important;
+        justify-content: space-between;
+      }
+      .cover-band {
+        background-color: #f8fafc !important;
+        border-left: 4px solid var(--primary) !important;
+        padding: 16px 20px !important;
+        margin-bottom: 20px !important;
+      }
+      .legal-content h2, .legal-content h3 {
+        page-break-after: avoid;
+        break-after: avoid;
+      }
+      .legal-footer {
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="screen-wrapper">
+    <div class="screen-controls">
+      <a href="/nda" class="btn-back">
+        ← Back to NDA
+      </a>
+      <button onclick="window.print()" class="btn-print">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-2px"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+        Print / Save as PDF
+      </button>
+    </div>
+
+    <div class="paper-page">
+      <div class="print-official-header">
+        <span>${escapeHtml(siteName)} Trust Center</span>
+        <span>Official Non-Disclosure Agreement (NDA) • Version ${escapeHtml(version)}</span>
+      </div>
+
+      <div class="cover-band" style="position: relative;">
+        ${siteLogo ? `
+        <div style="position: absolute; top: 16px; right: 20px; display: flex; align-items: center;">
+          <img src="${sanitizeUrl(siteLogo)}" alt="${escapeHtml(siteName)} Logo" style="max-height: 42px; max-width: 140px; object-fit: contain;" referrerPolicy="no-referrer" />
+        </div>
+        ` : ''}
+        <div style="font-size: 8.5pt; font-weight: 700; letter-spacing: 0.12em; color: var(--primary); margin-bottom: 6px; text-transform: uppercase;">${escapeHtml(siteName)} Trust Center</div>
+        <h1>Non-Disclosure Agreement (NDA)</h1>
+        <div class="meta-badge-row">
+          <span class="meta-badge active">Active Agreement</span>
+          <span class="meta-badge">Version ${escapeHtml(version)}</span>
+          <span>Effective Date: <strong>${escapeHtml(formattedDate)}</strong></span>
+          <span>• Restricted Document &amp; Policy Requests</span>
+        </div>
+      </div>
+
+      <div class="legal-content">
+        ${ndaBodyHtml}
+      </div>
+
+      <div class="legal-footer">
+        <span>${escapeHtml(siteName)} Trust Center • Official Legal Instrument</span>
+        <span>Generated: ${escapeHtml(generatedDate)}</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Trigger print dialog automatically if requested via URL
+    if (new URLSearchParams(window.location.search).get('print') === 'true') {
+      window.addEventListener('load', () => {
+        setTimeout(() => window.print(), 350);
+      });
+    }
+  </script>
+</body>
+</html>`;
+
+      res.setHeader('Content-Type', 'text/html');
+      res.send(html);
+    } catch (err) {
+      console.error('Error generating NDA whitepaper:', err);
+      res.status(500).send('<h1>Internal Server Error</h1><p>Failed to generate NDA document.</p>');
     }
   });
 
