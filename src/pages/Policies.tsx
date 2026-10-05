@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Shield, Mail, Globe, CheckCircle2, XCircle, Plus, Trash2, FileText, Edit2 } from 'lucide-react';
+import { Shield, Mail, Globe, CheckCircle2, XCircle, Plus, Trash2, Edit2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useRequestAccess } from '../contexts/RequestAccessContext';
 import { useCountry } from '../hooks/useCountry';
@@ -277,53 +277,48 @@ export function Policies() {
 
       {selectedProduct && (
         <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="p-3 bg-indigo-50 rounded-xl text-indigo-700">
-              <FileText className="w-6 h-6" aria-hidden="true" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-slate-900">Product Policies</h2>
-              <p className="text-slate-600 text-sm">Policies applicable to this product.</p>
-            </div>
+          <div className="mb-6">
+            <h2 className="text-xl font-bold text-slate-900">Product Policies</h2>
+            <p className="text-slate-600 text-sm mt-1">Policies applicable to this product.</p>
           </div>
 
           <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex flex-col space-y-3">
               {policies.map((policy) => (
-                <div key={policy.id} className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between group">
+                <div key={policy.id} className="bg-white p-4 sm:px-5 sm:py-4 rounded-xl border border-slate-200 hover:border-slate-300 shadow-2xs transition-colors group">
                   {editingPolicyId === policy.id ? (
-                    <div className="flex flex-col h-full">
-                      <div className="space-y-3 flex-grow">
+                    <div className="flex flex-col space-y-3">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <input 
                           type="text" 
                           value={editPolicyState.name}
                           onChange={(e) => setEditPolicyState({...editPolicyState, name: e.target.value})}
-                          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 md:col-span-1"
                           placeholder="Policy Name"
                         />
-                        <textarea 
-                          value={editPolicyState.description}
-                          onChange={(e) => setEditPolicyState({...editPolicyState, description: e.target.value})}
-                          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 resize-none h-20"
-                          placeholder="Description"
+                        <input 
+                          type="date" 
+                          value={editPolicyState.effective_date}
+                          onChange={(e) => setEditPolicyState({...editPolicyState, effective_date: e.target.value})}
+                          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                          placeholder="Effective Date"
                         />
-                        <div className="grid grid-cols-2 gap-3">
-                          <input 
-                            type="date" 
-                            value={editPolicyState.effective_date}
-                            onChange={(e) => setEditPolicyState({...editPolicyState, effective_date: e.target.value})}
-                            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
-                            placeholder="Effective Date"
-                          />
-                          <input 
-                            type="text" 
-                            value={editPolicyState.version}
-                            onChange={(e) => setEditPolicyState({...editPolicyState, version: e.target.value})}
-                            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
-                            placeholder="Version (e.g. 1.0)"
-                          />
-                        </div>
-                        <div className="flex items-center gap-2 pt-1 pb-2">
+                        <input 
+                          type="text" 
+                          value={editPolicyState.version}
+                          onChange={(e) => setEditPolicyState({...editPolicyState, version: e.target.value})}
+                          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                          placeholder="Version (e.g. 1.0)"
+                        />
+                      </div>
+                      <textarea 
+                        value={editPolicyState.description}
+                        onChange={(e) => setEditPolicyState({...editPolicyState, description: e.target.value})}
+                        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 resize-none h-20"
+                        placeholder="Description"
+                      />
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-100">
+                        <div className="flex items-center gap-2">
                           <input 
                             type="checkbox" 
                             id={`policy-edit-requestable-${policy.id}`}
@@ -335,36 +330,46 @@ export function Policies() {
                             Allow users to request this policy
                           </label>
                         </div>
-                      </div>
-                      <div className="flex gap-2 mt-4 pt-3 border-t border-slate-100">
-                        <Button variant="outline" size="sm" onClick={() => setEditingPolicyId(null)} className="flex-1">
-                          Cancel
-                        </Button>
-                        <Button size="sm" onClick={() => handleUpdatePolicy(policy.id)} className="flex-1">
-                          Save
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button variant="outline" size="sm" onClick={() => setEditingPolicyId(null)}>
+                            Cancel
+                          </Button>
+                          <Button size="sm" onClick={() => handleUpdatePolicy(policy.id)}>
+                            Save
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   ) : (
-                    <>
-                      <div className="flex justify-between items-start mb-4 flex-grow">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 bg-blue-50 rounded-lg text-blue-700 shrink-0">
-                            <FileText className="w-5 h-5" aria-hidden="true" />
-                          </div>
-                          <div>
-                            <h4 className="font-bold text-slate-900">{policy.name}</h4>
-                            {policy.description && (
-                              <p className="text-sm text-slate-500 mt-1 line-clamp-3">{policy.description}</p>
-                            )}
-                            <div className="flex gap-3 text-xs font-medium text-slate-500 mt-2">
-                              {policy.version && <span>Version: {policy.version}</span>}
-                              {policy.effective_date && <span>Effective: {new Date(policy.effective_date).toLocaleDateString()}</span>}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <h4 className="font-bold text-slate-900 text-base">{policy.name}</h4>
+                          {(policy.version || policy.effective_date) && (
+                            <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
+                              {policy.version && <span>Version {policy.version}</span>}
+                              {policy.version && policy.effective_date && <span aria-hidden="true">·</span>}
+                              {policy.effective_date && <span>Effective {new Date(policy.effective_date).toLocaleDateString()}</span>}
                             </div>
-                          </div>
+                          )}
                         </div>
+                        {policy.description && (
+                          <p className="text-sm text-slate-600 mt-1 leading-relaxed">{policy.description}</p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                        {policy.is_requestable === 1 && (
+                          <button 
+                            onClick={() => handleRequestPolicy(policy.name)}
+                            className="flex items-center gap-2 px-3.5 py-2 bg-slate-900 text-white text-xs font-medium rounded-lg hover:bg-slate-800 transition-colors whitespace-nowrap"
+                          >
+                            <Mail className="w-3.5 h-3.5" />
+                            Request Policy
+                          </button>
+                        )}
                         {(user?.role === 'admin' || user?.role === 'moderator') && (
-                          <div className="flex items-center gap-1 shrink-0">
+                          <div className="flex items-center gap-1 pl-1">
                             <button 
                               onClick={() => {
                                 setEditingPolicyId(policy.id);
@@ -391,60 +396,48 @@ export function Policies() {
                           </div>
                         )}
                       </div>
-                      
-                      <div className="flex flex-wrap gap-2 mt-auto pt-4">
-                        {policy.is_requestable === 1 && (
-                          <button 
-                            onClick={() => handleRequestPolicy(policy.name)}
-                            className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white text-xs font-medium rounded-lg hover:bg-slate-800 transition-colors"
-                          >
-                            <Mail className="w-3.5 h-3.5" />
-                            Request Policy
-                          </button>
-                        )}
-                      </div>
-                    </>
+                    </div>
                   )}
                 </div>
               ))}
 
               {/* Admin Add Policy */}
               {(user?.role === 'admin' || user?.role === 'moderator') && (
-                <div className="bg-slate-50 p-6 rounded-xl border border-dashed border-slate-300 flex flex-col gap-4">
-                  <h4 className="font-bold text-slate-900 flex items-center gap-2">
-                    <Plus className="w-5 h-5" /> Add Policy
+                <div className="bg-slate-50 p-5 rounded-xl border border-dashed border-slate-300 flex flex-col gap-3 mt-2">
+                  <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                    <Plus className="w-4 h-4" /> Add Policy
                   </h4>
-                  <div className="space-y-2">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <input 
                       type="text" 
                       placeholder="Policy Name (e.g. Information Security Policy)"
                       value={newPolicy.name}
                       onChange={(e) => setNewPolicy({...newPolicy, name: e.target.value})}
-                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
                     />
-                    <textarea 
-                      placeholder="Description (optional)"
-                      value={newPolicy.description}
-                      onChange={(e) => setNewPolicy({...newPolicy, description: e.target.value})}
-                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 resize-none h-20"
+                    <input 
+                      type="date" 
+                      value={newPolicy.effective_date}
+                      onChange={(e) => setNewPolicy({...newPolicy, effective_date: e.target.value})}
+                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
+                      placeholder="Effective Date"
                     />
-                    <div className="grid grid-cols-2 gap-3">
-                      <input 
-                        type="date" 
-                        value={newPolicy.effective_date}
-                        onChange={(e) => setNewPolicy({...newPolicy, effective_date: e.target.value})}
-                        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
-                        placeholder="Effective Date"
-                      />
-                      <input 
-                        type="text" 
-                        value={newPolicy.version}
-                        onChange={(e) => setNewPolicy({...newPolicy, version: e.target.value})}
-                        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
-                        placeholder="Version (e.g. 1.0)"
-                      />
-                    </div>
-                    <div className="flex items-center gap-2 pt-1 pb-2">
+                    <input 
+                      type="text" 
+                      value={newPolicy.version}
+                      onChange={(e) => setNewPolicy({...newPolicy, version: e.target.value})}
+                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
+                      placeholder="Version (e.g. 1.0)"
+                    />
+                  </div>
+                  <textarea 
+                    placeholder="Description (optional)"
+                    value={newPolicy.description}
+                    onChange={(e) => setNewPolicy({...newPolicy, description: e.target.value})}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 resize-none h-16"
+                  />
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+                    <div className="flex items-center gap-2">
                       <input 
                         type="checkbox" 
                         id="policy-requestable"
@@ -456,8 +449,8 @@ export function Policies() {
                         Allow users to request this policy
                       </label>
                     </div>
+                    <Button onClick={handleAddPolicy} size="sm" className="sm:w-auto w-full">Add to List</Button>
                   </div>
-                  <Button onClick={handleAddPolicy} className="w-full">Add to List</Button>
                 </div>
               )}
             </div>

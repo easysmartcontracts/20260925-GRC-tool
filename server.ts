@@ -1526,11 +1526,7 @@ async function startServer() {
     const vite = await createViteServer({
       server: { 
         middlewareMode: true,
-        allowedHosts: [
-          'trustcenter.k8s-test.bjornlunden.com',
-          'localhost',
-          '127.0.0.1',
-        ],
+        allowedHosts: true,
       },
       appType: 'spa',
     });

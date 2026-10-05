@@ -15,6 +15,8 @@ import { Controls } from './pages/Controls';
 import { Subprocessors } from './pages/Subprocessors';
 import { AdminKPI } from './pages/AdminKPI';
 import { Nda } from './pages/Nda';
+import { PrivacyNotice } from './pages/PrivacyNotice';
+import { CookieStatement } from './pages/CookieStatement';
 import { useAuth } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 
@@ -32,6 +34,8 @@ export default function App() {
     if (path === '/') return 'dashboard';
     if (path === '/login') return 'login';
     if (path === '/nda') return 'nda';
+    if (path === '/privacy') return 'privacy';
+    if (path === '/cookies') return 'cookies';
     if (path === '/admin/kpi') return 'admin-kpi';
     if (path === '/admin') return 'admin';
     if (path.startsWith('/product/')) {
@@ -53,6 +57,8 @@ export default function App() {
         } />
         <Route path="/login" element={<Login />} />
         <Route path="/nda" element={<Nda />} />
+        <Route path="/privacy" element={<PrivacyNotice />} />
+        <Route path="/cookies" element={<CookieStatement />} />
         <Route path="/documents" element={
           <ProtectedRoute sectionId="documents">
             <Documents />

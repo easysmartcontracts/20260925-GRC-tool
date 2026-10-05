@@ -713,57 +713,7 @@ export function Dashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Recent Documents */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="w-5 h-5 text-slate-400" />
-              {settings.pinned_documents?.length > 0 ? 'Pinned Documents' : 'Latest Documents'}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="divide-y divide-slate-100">
-              {recentDocs.map((doc) => (
-                <div key={doc.slug} className="p-4 hover:bg-slate-50 transition-colors flex items-center justify-between">
-                  <div>
-                    <h4 className="font-medium text-slate-900 flex items-center gap-2">
-                      {doc.name}
-                      {!!doc.requires_nda && <Lock className="w-3 h-3 text-amber-500" title="Requires NDA" />}
-                    </h4>
-                    <p className="text-sm text-slate-600 mt-1">{doc.type}</p>
-                  </div>
-                  {(doc.requires_nda || doc.url) && (
-                    <button 
-                      className="text-sm font-medium text-blue-600 hover:text-blue-800 focus:outline-none focus:underline"
-                      aria-label={`${doc.requires_nda ? 'Request' : 'Download'} ${doc.name}`}
-                      onClick={async () => {
-                        if (doc.requires_nda) {
-                          const prodSlug = typeof doc.products?.[0] === 'string' ? doc.products[0] : 'general';
-                          const prodName = products.find(p => p.slug === prodSlug)?.name;
-                          openRequestAccess({
-                            documentName: doc.name,
-                            productName: prodName,
-                            productSlug: prodSlug,
-                            documentType: 'restricted_document',
-                            recipientEmail: siteSettings?.mailto_legal || 'security@bjornlunden.com'
-                          });
-                        } else if (doc.url) {
-                          await trackMetric('download_document', doc.products?.[0] || 'general', doc.name);
-                          const finalUrl = doc.url.startsWith('http') ? doc.url : `https://${doc.url}`;
-                          window.open(finalUrl, '_blank');
-                        }
-                      }}
-                    >
-                      {doc.requires_nda ? 'Request' : 'Download'}
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
+      <div className="w-full">
         {/* Latest Controls */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">

@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { LayoutDashboard, ShieldCheck, FileCheck, Lock, FileText, Settings, Package, ExternalLink } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { Modal } from '../ui/Modal';
 import { getLastSelectedProduct } from '../../utils/productSelection';
 
 type SidebarProps = {
@@ -13,7 +12,6 @@ type SidebarProps = {
 
 export function Sidebar({ isOpen, onClose, activeSection }: SidebarProps) {
   const { user, publicPages, siteSettings } = useAuth();
-  const [activeModal, setActiveModal] = useState<'privacy' | 'cookie' | null>(null);
   const [products, setProducts] = useState<any[]>([]);
   const [lastSelected, setLastSelected] = useState<string | null>(getLastSelectedProduct());
 
@@ -76,12 +74,9 @@ export function Sidebar({ isOpen, onClose, activeSection }: SidebarProps) {
       items: [
         { id: 'legal', label: 'Legal Documents', path: lastSelected ? `/legal/${lastSelected}` : '/legal' },
         { id: 'subprocessors', label: 'Subprocessors', path: lastSelected ? `/subprocessors/${lastSelected}` : '/subprocessors' },
-      ]
-    },
-    {
-      title: 'Documents',
-      items: [
-        { id: 'documents', label: 'All Documents', path: '/documents' },
+        { id: 'nda', label: 'Non-Disclosure Agreement (NDA)', path: '/nda' },
+        { id: 'privacy', label: 'Privacy Notice', path: '/privacy' },
+        { id: 'cookies', label: 'Cookie Statement', path: '/cookies' },
       ]
     }
   ];
@@ -90,6 +85,7 @@ export function Sidebar({ isOpen, onClose, activeSection }: SidebarProps) {
     return items.filter(item => {
       if (user?.role === 'admin' || user?.role === 'moderator') return true;
       if (publicPages.includes(item.id)) return true;
+      if (['nda', 'privacy', 'cookies'].includes(item.id)) return true;
       if (user?.role === 'viewer' && user.allowedModules?.includes(item.id)) return true;
       return false;
     });
@@ -201,79 +197,8 @@ export function Sidebar({ isOpen, onClose, activeSection }: SidebarProps) {
             </div>
           )}
 
-          {/* Legal Notices */}
-          <div className="pt-4 border-t border-slate-200">
-            <ul className="space-y-2">
-              {siteSettings.privacy_notice && (
-                <li>
-                  <button
-                    onClick={() => {
-                      setActiveModal('privacy');
-                      onClose();
-                    }}
-                    className="w-full text-left px-3 py-2.5 text-sm font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-colors"
-                  >
-                    Privacy Notice
-                  </button>
-                </li>
-              )}
-              {siteSettings.cookie_notice && (
-                <li>
-                  <button
-                    onClick={() => {
-                      setActiveModal('cookie');
-                      onClose();
-                    }}
-                    className="w-full text-left px-3 py-2.5 text-sm font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-colors"
-                  >
-                    Cookie Notice
-                  </button>
-                </li>
-              )}
-              {(siteSettings.nda_notice || siteSettings.nda_url) && (
-                <li>
-                  <Link
-                    to="/nda"
-                    onClick={onClose}
-                    className={`w-full block px-3 py-2.5 text-sm font-medium rounded-md transition-colors ${
-                      activeSection === 'nda'
-                        ? 'bg-blue-50 text-blue-700 font-semibold'
-                        : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
-                    }`}
-                  >
-                    Non-Disclosure Agreement (NDA)
-                  </Link>
-                </li>
-              )}
-            </ul>
-          </div>
-
         </nav>
       </aside>
-
-      <Modal
-        isOpen={activeModal === 'privacy'}
-        onClose={() => setActiveModal(null)}
-        title="Privacy Notice"
-        maxWidth="max-w-3xl"
-      >
-        <div 
-          className="prose prose-sm max-w-none text-slate-700"
-          dangerouslySetInnerHTML={{ __html: siteSettings.privacy_notice || '' }}
-        />
-      </Modal>
-
-      <Modal
-        isOpen={activeModal === 'cookie'}
-        onClose={() => setActiveModal(null)}
-        title="Cookie Notice"
-        maxWidth="max-w-3xl"
-      >
-        <div 
-          className="prose prose-sm max-w-none text-slate-700"
-          dangerouslySetInnerHTML={{ __html: siteSettings.cookie_notice || '' }}
-        />
-      </Modal>
     </>
   );
 }
