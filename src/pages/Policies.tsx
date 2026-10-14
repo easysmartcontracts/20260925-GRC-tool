@@ -6,6 +6,7 @@ import { useRequestAccess } from '../contexts/RequestAccessContext';
 import { useCountry } from '../hooks/useCountry';
 import { Button } from '../components/ui/Button';
 import { getLastSelectedProduct, setLastSelectedProduct, resolveTargetProduct } from '../utils/productSelection';
+import { fetchPublicProducts, fetchJson } from '../utils/api';
 
 type Policy = {
   id: number;
@@ -33,11 +34,9 @@ export function Policies() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   useEffect(() => {
-    fetch('/api/public/products')
-      .then(res => res.json())
-      .then(data => {
-        setProducts(data);
-      });
+    fetchPublicProducts().then(data => {
+      if (Array.isArray(data)) setProducts(data);
+    });
   }, []);
 
   useEffect(() => {
@@ -48,7 +47,7 @@ export function Policies() {
   }, [slug]);
 
   const displayProducts = products.filter(p => {
-    if (country !== 'all' && (!p.countries || !p.countries.includes(country))) {
+    if (country !== 'all' && p.countries && p.countries.length > 0 && !p.countries.includes(country)) {
       return false;
     }
     return true;
@@ -65,11 +64,11 @@ export function Policies() {
 
   useEffect(() => {
     if (selectedProduct) {
-      fetch(`/api/public/product-policies/${selectedProduct}`)
-        .then(res => res.json())
+      fetchJson<Policy[]>(`/api/public/product-policies/${selectedProduct}`)
         .then(data => {
-          setPolicies(data);
-        });
+          if (Array.isArray(data)) setPolicies(data);
+        })
+        .catch(err => console.warn('Could not fetch policies:', err));
     }
   }, [selectedProduct]);
 

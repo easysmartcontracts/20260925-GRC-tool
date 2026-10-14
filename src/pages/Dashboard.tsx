@@ -8,6 +8,7 @@ import { useRequestAccess } from '../contexts/RequestAccessContext';
 import { useCountry } from '../hooks/useCountry';
 import { COUNTRIES } from '../constants';
 import { setLastSelectedProduct } from '../utils/productSelection';
+import { fetchPublicProducts, fetchJson } from '../utils/api';
 
 type Product = {
   slug: string;
@@ -22,10 +23,13 @@ type Document = {
   id: number | string;
   name: string;
   slug: string;
+  product_name?: string;
   type: string;
   category: string;
   requires_nda: boolean | number;
+  soa_available?: boolean;
   url?: string;
+  description?: string;
   products: string[];
   source?: string;
 };
@@ -43,7 +47,8 @@ export function Dashboard() {
     notification_global: true,
     notification_countries: [] as string[],
     pinned_documents: {} as Record<string, string[]>,
-    pinned_controls: {} as Record<string, string[]>
+    pinned_controls: {} as Record<string, string[]>,
+    show_status_page_link: true
   });
   const [isEditingSettings, setIsEditingSettings] = useState(false);
   const [settingsForm, setSettingsForm] = useState(settings);
@@ -53,11 +58,9 @@ export function Dashboard() {
   const [editForm, setEditForm] = useState({ slug: '', name: '', category: '', status_url: '', color: '#1F79C3', countries: [] as string[] });
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
   const country = useCountry();
   const [editingRegion, setEditingRegion] = useState('all');
   const [editingDocProduct, setEditingDocProduct] = useState('all');
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const { openRequestAccess } = useRequestAccess();
 
   const canEdit = user?.role === 'admin' || user?.role === 'moderator';
@@ -75,19 +78,14 @@ export function Dashboard() {
   };
 
   const filteredProducts = products.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          p.category.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCountry = country === 'all' || (p.countries && p.countries.includes(country));
-    const matchesCategory = categoryFilter === 'all' || p.category === categoryFilter;
-    return matchesSearch && matchesCountry && matchesCategory;
+    const matchesCountry = country === 'all' || !p.countries || p.countries.length === 0 || p.countries.includes(country);
+    return matchesCountry;
   });
 
-  const categories = Array.from(new Set(products.filter(p => country === 'all' || (p.countries && p.countries.includes(country))).map(p => p.category))).filter(Boolean).sort();
-
   const fetchSettings = () => {
-    fetch('/api/public/dashboard-settings')
-      .then(res => res.json())
+    fetchJson('/api/public/dashboard-settings')
       .then(data => {
+        if (!data) return;
         const globalVal = data.notification_global !== undefined 
           ? (data.notification_global === true || data.notification_global === 'true' || data.notification_global === 1)
           : true;
@@ -105,37 +103,35 @@ export function Dashboard() {
             ? data.notification_countries 
             : (typeof data.notification_countries === 'string' ? JSON.parse(data.notification_countries) : []),
           pinned_documents: pDocs,
-          pinned_controls: pControls
+          pinned_controls: pControls,
+          show_status_page_link: data.show_status_page_link === undefined ? true : (data.show_status_page_link === true || data.show_status_page_link === 'true')
         };
         setSettings(s);
         setSettingsForm(s);
       })
-      .catch(err => console.error('Failed to fetch settings', err));
+      .catch(err => console.warn('Could not fetch settings:', err));
   };
 
   const fetchDocuments = () => {
-    fetch('/api/public/dashboard-documents')
-      .then(res => res.json())
+    fetchJson<any[]>('/api/public/dashboard-documents')
       .then(data => {
-        setAllDocs(data);
+        if (Array.isArray(data)) setAllDocs(data);
       })
-      .catch(err => console.error('Failed to fetch dashboard documents', err));
+      .catch(err => console.warn('Could not fetch dashboard documents:', err));
   };
 
   const fetchProducts = () => {
-    fetch('/api/public/products?t=' + new Date().getTime())
-      .then(res => res.json())
-      .then(data => setProducts(data))
-      .catch(err => console.error('Failed to fetch products', err));
+    fetchPublicProducts().then(data => {
+      if (Array.isArray(data)) setProducts(data);
+    });
   };
 
   const fetchControls = () => {
-    fetch('/api/public/all-controls')
-      .then(res => res.json())
+    fetchJson<any[]>('/api/public/all-controls')
       .then(data => {
-        setAllControls(data);
+        if (Array.isArray(data)) setAllControls(data);
       })
-      .catch(err => console.error('Failed to fetch controls', err));
+      .catch(err => console.warn('Could not fetch controls:', err));
   };
 
   useEffect(() => {
@@ -149,44 +145,56 @@ export function Dashboard() {
     if (allDocs.length > 0) {
       const filteredDocs = allDocs.filter(d => {
         if (!d.products || d.products.length === 0) {
-          return country === 'all' && categoryFilter === 'all';
+          return true;
         }
         return d.products.some(slug => {
           const p = products.find(prod => prod.slug === slug);
-          const matchesCountry = country === 'all' || p?.countries?.includes(country);
-          const matchesCategory = categoryFilter === 'all' || p?.category === categoryFilter;
-          return matchesCountry && matchesCategory;
+          const matchesCountry = country === 'all' || !p?.countries || p.countries.length === 0 || p.countries.includes(country);
+          return matchesCountry;
         });
       });
 
-      const pinnedDocsForRegion = settings.pinned_documents?.[country] || settings.pinned_documents?.['all'] || [];
+      const regionDocs = settings.pinned_documents?.[country];
+      const pinnedDocsForRegion = (Array.isArray(regionDocs) && regionDocs.length > 0)
+        ? regionDocs
+        : (settings.pinned_documents?.['all'] || []);
+
       if (pinnedDocsForRegion.length > 0) {
-        const pinned = pinnedDocsForRegion.map(slug => filteredDocs.find(d => d.slug === slug)).filter(Boolean) as Document[];
-        setRecentDocs(pinned.length > 0 ? pinned : filteredDocs.slice(0, 3));
+        const pinned = pinnedDocsForRegion
+          .map(slug => filteredDocs.find(d => d.slug === slug) || allDocs.find(d => d.slug === slug))
+          .filter(Boolean) as Document[];
+        setRecentDocs(pinned.length > 0 ? pinned : filteredDocs.slice(0, 4));
       } else {
-        setRecentDocs(filteredDocs.slice(0, 3));
+        setRecentDocs(filteredDocs.slice(0, 4));
       }
+    } else {
+      setRecentDocs([]);
     }
-  }, [allDocs, settings.pinned_documents, country, categoryFilter, products]);
+  }, [allDocs, settings.pinned_documents, country, products]);
 
   useEffect(() => {
     if (allControls.length > 0) {
       const filteredControls = allControls.filter(c => {
         const p = products.find(prod => prod.slug === c.product_slug);
-        const matchesCountry = country === 'all' || p?.countries?.includes(country);
-        const matchesCategory = categoryFilter === 'all' || p?.category === categoryFilter;
-        return matchesCountry && matchesCategory;
+        const matchesCountry = country === 'all' || !p?.countries || p.countries.length === 0 || p.countries.includes(country);
+        return matchesCountry;
       });
 
-      const pinnedControlsForRegion = settings.pinned_controls?.[country] || settings.pinned_controls?.['all'] || [];
+      const regionControls = settings.pinned_controls?.[country];
+      const pinnedControlsForRegion = (Array.isArray(regionControls) && regionControls.length > 0)
+        ? regionControls
+        : (settings.pinned_controls?.['all'] || []);
+
       if (pinnedControlsForRegion.length > 0) {
-        const pinned = pinnedControlsForRegion.map(id => filteredControls.find(c => `${c.product_slug}-${c.topic_id}` === id)).filter(Boolean);
+        const pinned = pinnedControlsForRegion
+          .map(id => filteredControls.find(c => `${c.product_slug}-${c.topic_id}` === id) || allControls.find(c => `${c.product_slug}-${c.topic_id}` === id))
+          .filter(Boolean);
         setLatestControls(pinned.length > 0 ? pinned : filteredControls.slice(0, 3));
       } else {
         setLatestControls(filteredControls.slice(0, 3));
       }
     }
-  }, [allControls, settings.pinned_controls, country, categoryFilter, products]);
+  }, [allControls, settings.pinned_controls, country, products]);
 
   const handleSaveSettings = async () => {
     try {
@@ -378,13 +386,20 @@ export function Dashboard() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Status Page URL</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-medium text-slate-700">Status Page URL</label>
+                  <span className="text-xs text-slate-400">Optional</span>
+                </div>
                 <input 
-                  type="text" 
+                  type="url" 
                   value={editForm.status_url}
                   onChange={e => setEditForm({...editForm, status_url: e.target.value})}
+                  placeholder="https://status.yourproduct.com"
                   className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                <p className="text-xs text-slate-500 mt-1">
+                  Leave empty if this product does not have an external status page. Only products with a filled-in URL will display a "Status Page" link on the dashboard overview.
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Color (Hex)</label>
@@ -452,25 +467,8 @@ export function Dashboard() {
           <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Trust Center Dashboard</h1>
           <p className="text-slate-700 mt-1 font-medium">{settings.welcome_message}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-          <input
-            type="text"
-            placeholder="Search products..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full md:w-64 px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
-          />
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            className="px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm bg-white"
-          >
-            <option value="all">All Categories</option>
-            {categories.map(cat => (
-              <option key={cat} value={cat}>{cat}</option>
-            ))}
-          </select>
-          {canEdit && (
+        {canEdit && (
+          <div className="flex items-center gap-3">
             <button
               onClick={() => { setSettingsForm(settings); setIsEditingSettings(true); }}
               className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors shadow-sm text-sm font-medium whitespace-nowrap"
@@ -478,8 +476,8 @@ export function Dashboard() {
               <Edit2 className="w-4 h-4" />
               Edit Dashboard
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {isEditingSettings && (
@@ -575,6 +573,26 @@ export function Dashboard() {
               )}
 
               <div className="pt-4 border-t border-slate-200">
+                <div className="flex items-start gap-3 p-3.5 bg-slate-50 border border-slate-200 rounded-lg">
+                  <input 
+                    type="checkbox"
+                    id="dashboard_show_status_page_link"
+                    checked={settingsForm.show_status_page_link ?? true}
+                    onChange={e => setSettingsForm({ ...settingsForm, show_status_page_link: e.target.checked })}
+                    className="mt-1 w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                  />
+                  <div>
+                    <label htmlFor="dashboard_show_status_page_link" className="block text-sm font-semibold text-slate-800 cursor-pointer">
+                      Show Status Page links on product cards
+                    </label>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      When enabled, only products with an active Status Page URL will display a link on the dashboard. Products without a status page link remain clean with no broken link.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-slate-200">
                 <div className="flex flex-wrap gap-4 mb-4 justify-between items-end">
                   <div>
                     <label className="block text-sm font-semibold text-slate-700 mb-1">Editing Dashboard for Region</label>
@@ -606,34 +624,65 @@ export function Dashboard() {
 
                 <div className="space-y-6">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Pinned Documents for {editingRegion === 'all' ? 'Global' : COUNTRIES.find(c => c.code === editingRegion)?.name}</label>
-                    <div className="border border-slate-200 rounded-md max-h-56 overflow-y-auto p-2 space-y-1">
-                      {allDocs.filter(doc => editingDocProduct === 'all' || doc.products?.includes(editingDocProduct)).map(doc => (
-                        <label key={doc.slug} className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded cursor-pointer">
-                          <input 
-                            type="checkbox" 
-                            checked={(settingsForm.pinned_documents?.[editingRegion] || []).includes(doc.slug)}
-                            onChange={(e) => {
-                              const list = settingsForm.pinned_documents?.[editingRegion] || [];
-                              const newPinned = e.target.checked 
-                                ? [...list, doc.slug]
-                                : list.filter(s => s !== doc.slug);
-                              setSettingsForm({
-                                ...settingsForm, 
-                                pinned_documents: { ...settingsForm.pinned_documents, [editingRegion]: newPinned }
-                              });
-                            }}
-                            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                          />
-                          <span className="text-sm text-slate-700">{doc.name} <span className="text-slate-400 text-xs">({doc.type})</span></span>
-                        </label>
-                      ))}
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-sm font-medium text-slate-700">
+                        Pinned Documents for {editingRegion === 'all' ? 'Global' : COUNTRIES.find(c => c.code === editingRegion)?.name}
+                      </label>
+                      <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                        {(settingsForm.pinned_documents?.[editingRegion] || []).length} pinned
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mb-2">
+                      Select documents from across the system (Certifications, Reports, Policies, Legal, DPAs) to feature on the Dashboard Overview for all visitors, including users who are not logged in.
+                    </p>
+                    <div className="border border-slate-200 rounded-md max-h-60 overflow-y-auto p-2 space-y-1">
+                      {allDocs.filter(doc => editingDocProduct === 'all' || doc.products?.includes(editingDocProduct)).map(doc => {
+                        const prodLabel = doc.product_name || (doc.products || []).map(s => products.find(p => p.slug === s)?.name || s).filter(Boolean).join(', ');
+                        const isChecked = (settingsForm.pinned_documents?.[editingRegion] || []).includes(doc.slug);
+                        return (
+                          <label key={doc.slug} className={`flex items-center justify-between gap-2 p-2 rounded cursor-pointer transition-colors ${isChecked ? 'bg-blue-50/60 hover:bg-blue-50' : 'hover:bg-slate-50'}`}>
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <input 
+                                type="checkbox" 
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  const list = settingsForm.pinned_documents?.[editingRegion] || [];
+                                  const newPinned = e.target.checked 
+                                    ? [...list, doc.slug]
+                                    : list.filter(s => s !== doc.slug);
+                                  setSettingsForm({
+                                    ...settingsForm, 
+                                    pinned_documents: { ...settingsForm.pinned_documents, [editingRegion]: newPinned }
+                                  });
+                                }}
+                                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 shrink-0"
+                              />
+                              <div className="truncate">
+                                <span className="text-sm font-medium text-slate-800">{doc.name}</span>
+                                {prodLabel && (
+                                  <span className="text-xs text-slate-500 ml-1.5">• {prodLabel}</span>
+                                )}
+                              </div>
+                            </div>
+                            <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-slate-100 text-slate-600 shrink-0">
+                              {doc.type}
+                            </span>
+                          </label>
+                        );
+                      })}
                       {allDocs.filter(doc => editingDocProduct === 'all' || doc.products?.includes(editingDocProduct)).length === 0 && <p className="text-sm text-slate-500 p-2">No documents available for this product.</p>}
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Pinned Controls for {editingRegion === 'all' ? 'Global' : COUNTRIES.find(c => c.code === editingRegion)?.name}</label>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-sm font-medium text-slate-700">
+                        Pinned Controls for {editingRegion === 'all' ? 'Global' : COUNTRIES.find(c => c.code === editingRegion)?.name}
+                      </label>
+                      <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                        {(settingsForm.pinned_controls?.[editingRegion] || []).length} pinned
+                      </span>
+                    </div>
                     <div className="border border-slate-200 rounded-md max-h-56 overflow-y-auto p-2 space-y-1">
                       {allControls.filter(control => editingDocProduct === 'all' || control.product_slug === editingDocProduct).map(control => {
                         const id = `${control.product_slug}-${control.topic_id}`;
@@ -713,13 +762,106 @@ export function Dashboard() {
         </div>
       )}
 
-      <div className="w-full">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full">
+        {/* Pinned Documents */}
+        <Card className="flex flex-col">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5 text-slate-400" />
+              {((settings.pinned_documents?.[country]?.length || 0) > 0 || (settings.pinned_documents?.['all']?.length || 0) > 0)
+                ? 'Pinned Documents'
+                : 'Featured Documents'}
+            </CardTitle>
+            {canEdit && (
+              <button
+                onClick={() => {
+                  setSettingsForm(settings);
+                  setIsEditingSettings(true);
+                }}
+                className="text-xs font-medium text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+                Pin Documents
+              </button>
+            )}
+          </CardHeader>
+          <CardContent className="p-0 flex-1">
+            <div className="divide-y divide-slate-100">
+              {recentDocs.length > 0 ? (
+                recentDocs.map((doc) => {
+                  const productNames = doc.product_name || (doc.products || [])
+                    .map(slug => products.find(p => p.slug === slug)?.name || slug)
+                    .filter(Boolean)
+                    .join(', ');
+                  const isNdaRequired = doc.requires_nda === 1 || doc.requires_nda === true;
+
+                  return (
+                    <div key={doc.slug} className="p-4 hover:bg-slate-50 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-medium text-slate-900">{doc.name}</h4>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                            {doc.type}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-1 text-xs text-slate-600 flex-wrap">
+                          {productNames && (
+                            <span className="font-medium text-slate-700">{productNames}</span>
+                          )}
+                          {doc.description && (
+                            <>
+                              {productNames && <span className="text-slate-300">•</span>}
+                              <span className="text-slate-500 line-clamp-1">{doc.description}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="shrink-0 flex items-center gap-2 self-start sm:self-center">
+                        {isNdaRequired || !doc.url ? (
+                          <button
+                            onClick={() => {
+                              trackMetric('document_request', doc.products?.[0] || 'general', doc.name);
+                              openRequestAccess(doc.name, doc.type, doc.products?.[0]);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-2xs cursor-pointer whitespace-nowrap"
+                          >
+                            <Lock className="w-3.5 h-3.5 text-amber-400" />
+                            Request Access
+                          </button>
+                        ) : (
+                          <a
+                            href={doc.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => trackMetric('document_download', doc.products?.[0] || 'general', doc.name)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-colors whitespace-nowrap"
+                          >
+                            View Document
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="p-8 text-center text-slate-600 italic font-medium">
+                  No documents found.
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Latest Controls */}
-        <Card>
+        <Card className="flex flex-col">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <Shield className="w-5 h-5 text-slate-400" />
-              {settings.pinned_controls?.length > 0 ? 'Pinned Controls' : 'Latest Controls'}
+              {((settings.pinned_controls?.[country]?.length || 0) > 0 || (settings.pinned_controls?.['all']?.length || 0) > 0)
+                ? 'Pinned Controls'
+                : 'Latest Controls'}
             </CardTitle>
             <Link 
               to="/controls"
@@ -728,7 +870,7 @@ export function Dashboard() {
               View All
             </Link>
           </CardHeader>
-          <CardContent className="p-0">
+          <CardContent className="p-0 flex-1">
             <div className="divide-y divide-slate-100">
               {latestControls.length > 0 ? (
                 latestControls.map((ctrl, idx) => (
@@ -796,12 +938,15 @@ export function Dashboard() {
                   </div>
                 )}
                 <div>
-                  <div className="flex justify-between items-start mb-2">
-                    <div 
-                      className="w-3 h-3 rounded-full mt-1 shrink-0" 
-                      style={{ backgroundColor: product.color }}
-                    />
+                  <div className="flex items-center justify-between gap-2 mb-2.5">
                     <div className="flex items-center gap-2">
+                      <div 
+                        className="w-2.5 h-2.5 rounded-full shrink-0" 
+                        style={{ backgroundColor: product.color }}
+                      />
+                      <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{product.category}</span>
+                    </div>
+                    {settings.show_status_page_link && product.status_url && product.status_url.trim() !== '' && (
                       <a 
                         href={product.status_url} 
                         target="_blank" 
@@ -810,9 +955,9 @@ export function Dashboard() {
                       >
                         Status Page <ExternalLink className="w-3 h-3 shrink-0" />
                       </a>
-                    </div>
+                    )}
                   </div>
-                  <h4 className="font-semibold text-slate-900 pr-12">
+                  <h4 className="font-semibold text-slate-900 pr-6 text-base">
                     <Link
                       to={`/security-overview/${product.slug}`}
                       onClick={() => setLastSelectedProduct(product.slug)}
@@ -823,7 +968,6 @@ export function Dashboard() {
                       <ChevronRight className="w-3.5 h-3.5 text-blue-500 opacity-0 group-hover/pname:opacity-100 transition-opacity shrink-0" />
                     </Link>
                   </h4>
-                  <p className="text-xs text-slate-600 uppercase tracking-wider mt-1">{product.category}</p>
                   {product.countries && product.countries.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-3">
                       {product.countries.map((c: string) => {

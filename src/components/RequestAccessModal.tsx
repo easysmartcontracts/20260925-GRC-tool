@@ -17,14 +17,48 @@ export interface RequestAccessModalProps {
   target?: RequestAccessTarget | null;
 }
 
-const RELATIONSHIP_OPTIONS = [
+export const RELEVANT_JOB_TITLES = [
+  'Chief Information Security Officer (CISO)',
+  'Data Protection Officer (DPO) / Privacy Officer',
+  'Chief Technology Officer (CTO) / VP Engineering',
+  'Chief Information Officer (CIO) / IT Director',
+  'Information Security Manager / Security Lead',
+  'Security Architect / Analyst',
+  'Compliance Officer / Regulatory Affairs Manager',
+  'General Counsel / Legal Counsel',
+  'Internal Auditor / Compliance Auditor',
+  'External Auditor / Third-Party Assessor',
+  'Vendor Risk Manager / Third-Party Risk Assessor',
+  'Procurement Director / Vendor Management Lead',
+  'Chief Financial Officer (CFO) / Finance Director',
+  'Managing Director / CEO / Executive',
+  'Accounting & Payroll Manager / Controller',
+  'IT Operations Manager / System Administrator',
+  'Other (specify)'
+] as const;
+
+export const RELEVANT_PURPOSES = [
+  'Annual Vendor Due Diligence & Security Review',
+  'GDPR & Privacy Compliance Assessment',
+  'Pre-contractual Procurement & Vendor Evaluation',
+  'ISO 27001 / SOC 2 / ISAE 3402 Audit Verification',
+  'Enterprise Customer Security Questionnaire',
+  'Regulatory Authority & Statutory Compliance Inquiry',
+  'Incident Response & Business Continuity Verification',
+  'Subprocessor & Cross-Border Data Transfer Review',
+  'Legal, Insurance & Contractual Risk Review',
+  'Other (specify)'
+] as const;
+
+export const RELATIONSHIP_OPTIONS = [
   'Current Customer / Client',
   'Prospective Customer / Evaluation',
-  'Partner / Reseller',
-  'Auditor / Compliance Assessor',
-  'Vendor / Supplier',
+  'Certified Accounting Partner / Bureau',
+  'System Integration / Reseller Partner',
+  'External Auditor / Compliance Assessor',
+  'Vendor / Technology Supplier',
   'Other'
-];
+] as const;
 
 export function RequestAccessModal({ isOpen, onClose, target }: RequestAccessModalProps) {
   const { siteSettings, user } = useAuth();
@@ -35,8 +69,10 @@ export function RequestAccessModal({ isOpen, onClose, target }: RequestAccessMod
     businessEmail: '',
     company: '',
     jobTitle: '',
+    customJobTitle: '',
     relationship: '',
     purpose: '',
+    customPurpose: '',
     comments: ''
   });
 
@@ -91,18 +127,41 @@ export function RequestAccessModal({ isOpen, onClose, target }: RequestAccessMod
     setValidationError(null);
 
     // Validation checks
-    if (!formData.firstName.trim() || !formData.lastName.trim() || !formData.businessEmail.trim() || !formData.company.trim() || !formData.jobTitle.trim()) {
+    const finalJobTitle = formData.jobTitle === 'Other (specify)'
+      ? (formData.customJobTitle.trim() ? `Other: ${formData.customJobTitle.trim()}` : '')
+      : formData.jobTitle.trim();
+
+    const finalPurpose = formData.purpose === 'Other (specify)'
+      ? (formData.customPurpose.trim() ? `Other: ${formData.customPurpose.trim()}` : '')
+      : formData.purpose.trim();
+
+    if (!formData.firstName.trim() || !formData.lastName.trim() || !formData.businessEmail.trim() || !formData.company.trim()) {
       setValidationError('Please fill in all required contact details.');
       return;
     }
 
-    if (!formData.relationship) {
-      setValidationError('Please select your relationship to Björn Lunden.');
+    if (!formData.jobTitle) {
+      setValidationError('Please select your job title from the dropdown list.');
       return;
     }
 
-    if (!formData.purpose.trim()) {
-      setValidationError('Please provide the purpose of your request.');
+    if (formData.jobTitle === 'Other (specify)' && !formData.customJobTitle.trim()) {
+      setValidationError('Please specify your job title in the provided text field.');
+      return;
+    }
+
+    if (!formData.relationship) {
+      setValidationError('Please select your relationship to Bjorn Lunden.');
+      return;
+    }
+
+    if (!formData.purpose) {
+      setValidationError('Please select the purpose of your request from the dropdown list.');
+      return;
+    }
+
+    if (formData.purpose === 'Other (specify)' && !formData.customPurpose.trim()) {
+      setValidationError('Please specify the purpose of your request in the provided text field.');
       return;
     }
 
@@ -145,9 +204,9 @@ export function RequestAccessModal({ isOpen, onClose, target }: RequestAccessMod
           lastName: formData.lastName,
           businessEmail: formData.businessEmail,
           company: formData.company,
-          jobTitle: formData.jobTitle,
+          jobTitle: finalJobTitle,
           relationship: formData.relationship,
-          purpose: formData.purpose,
+          purpose: finalPurpose,
           comments: formData.comments,
           ndaAccepted: legal.agreeMnda,
           ndaAcceptedAt: legal.ndaAcceptedAt || new Date().toISOString()
@@ -161,7 +220,7 @@ export function RequestAccessModal({ isOpen, onClose, target }: RequestAccessMod
 
     // Build formatted email body with explicit NDA accepted and applicable text and link
     const subject = `Request Access to Documentation - ${documentTitle}${productTitle ? ` (${productTitle})` : ''}`;
-    const body = `Hello Björn Lunden Security & Compliance Team,
+    const body = `Hello Bjorn Lunden Security & Compliance Team,
 
 I am requesting a copy of the following documentation/policy:
 
@@ -172,12 +231,12 @@ First name: ${formData.firstName.trim()}
 Last name: ${formData.lastName.trim()}
 Business email: ${formData.businessEmail.trim()}
 Company: ${formData.company.trim()}
-Job title: ${formData.jobTitle.trim()}
+Job title: ${finalJobTitle}
 
 --- REQUEST DETAILS ---
-Relationship to Björn Lunden: ${formData.relationship}
+Relationship to Bjorn Lunden: ${formData.relationship}
 Purpose of request:
-${formData.purpose.trim()}
+${finalPurpose}
 ${formData.comments.trim() ? `\nComments:\n${formData.comments.trim()}\n` : ''}
 --- NON-DISCLOSURE AGREEMENT (NDA) STATUS ---
 NDA Status: ACCEPTED AND APPLICABLE
@@ -193,7 +252,7 @@ Applicability Notice: The requester understands that all disclosed documents, au
 [X] Watermark Notice: Requester acknowledges all documents will be watermarked with personal and company details and may only be used solely for the stated purpose.
 [X] Authorization Confirmation: Requester confirms authority to receive confidential information on behalf of their organization.
 
-Submitted via Björn Lunden Trust Center on ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`;
+Submitted via Bjorn Lunden Trust Center on ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`;
 
     setSubmitted(true);
 
@@ -354,15 +413,30 @@ Submitted via Björn Lunden Trust Center on ${new Date().toLocaleDateString('en-
                       <label htmlFor="req-job-title" className="block text-xs font-semibold text-slate-700 mb-1">
                         Job title <span className="text-red-500">*</span>
                       </label>
-                      <input 
+                      <select 
                         id="req-job-title"
-                        type="text" 
                         required
                         value={formData.jobTitle}
                         onChange={(e) => setFormData({ ...formData, jobTitle: e.target.value })}
-                        className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Chief Information Security Officer"
-                      />
+                        className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                      >
+                        <option value="" disabled>Select your relevant job title...</option>
+                        {RELEVANT_JOB_TITLES.map((title) => (
+                          <option key={title} value={title}>{title}</option>
+                        ))}
+                      </select>
+                      {formData.jobTitle === 'Other (specify)' && (
+                        <div className="mt-2 animate-in fade-in duration-200">
+                          <input 
+                            type="text" 
+                            required
+                            value={formData.customJobTitle}
+                            onChange={(e) => setFormData({ ...formData, customJobTitle: e.target.value })}
+                            className="w-full px-3 py-2 text-sm border border-blue-300 bg-blue-50/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Please specify your job title..."
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -376,7 +450,7 @@ Submitted via Björn Lunden Trust Center on ${new Date().toLocaleDateString('en-
                   <div className="space-y-3.5">
                     <div>
                       <label htmlFor="req-relationship" className="block text-xs font-semibold text-slate-700 mb-1">
-                        Relationship to Björn Lunden <span className="text-red-500">*</span>
+                        Relationship to Bjorn Lunden <span className="text-red-500">*</span>
                       </label>
                       <select
                         id="req-relationship"
@@ -385,7 +459,7 @@ Submitted via Björn Lunden Trust Center on ${new Date().toLocaleDateString('en-
                         onChange={(e) => setFormData({ ...formData, relationship: e.target.value })}
                         className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                       >
-                        <option value="" disabled>Select relationship...</option>
+                        <option value="" disabled>Select relationship to Bjorn Lunden...</option>
                         {RELATIONSHIP_OPTIONS.map((opt) => (
                           <option key={opt} value={opt}>{opt}</option>
                         ))}
@@ -396,15 +470,30 @@ Submitted via Björn Lunden Trust Center on ${new Date().toLocaleDateString('en-
                       <label htmlFor="req-purpose" className="block text-xs font-semibold text-slate-700 mb-1">
                         Purpose of request <span className="text-red-500">*</span>
                       </label>
-                      <textarea 
+                      <select 
                         id="req-purpose"
                         required
-                        rows={2}
                         value={formData.purpose}
                         onChange={(e) => setFormData({ ...formData, purpose: e.target.value })}
-                        className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y"
-                        placeholder="Explain the business or compliance purpose for requesting this documentation (e.g., annual vendor risk assessment, customer audit)..."
-                      />
+                        className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                      >
+                        <option value="" disabled>Select purpose of request...</option>
+                        {RELEVANT_PURPOSES.map((purpose) => (
+                          <option key={purpose} value={purpose}>{purpose}</option>
+                        ))}
+                      </select>
+                      {formData.purpose === 'Other (specify)' && (
+                        <div className="mt-2 animate-in fade-in duration-200">
+                          <textarea 
+                            required
+                            rows={2}
+                            value={formData.customPurpose}
+                            onChange={(e) => setFormData({ ...formData, customPurpose: e.target.value })}
+                            className="w-full px-3 py-2 text-sm border border-blue-300 bg-blue-50/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+                            placeholder="Please specify the business or compliance purpose for requesting this documentation..."
+                          />
+                        </div>
+                      )}
                     </div>
 
                     <div>

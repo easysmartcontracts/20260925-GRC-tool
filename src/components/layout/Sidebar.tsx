@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { LayoutDashboard, ShieldCheck, FileCheck, Lock, FileText, Settings, Package, ExternalLink } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { getLastSelectedProduct } from '../../utils/productSelection';
+import { fetchPublicProducts } from '../../utils/api';
 
 type SidebarProps = {
   isOpen: boolean;
@@ -24,20 +25,11 @@ export function Sidebar({ isOpen, onClose, activeSection }: SidebarProps) {
   }, []);
 
   useEffect(() => {
-    fetch('/api/public/products')
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setProducts(data);
-        } else {
-          console.error('Expected array for products, got:', data);
-          setProducts([]);
-        }
-      })
-      .catch(err => {
-        console.error('Failed to fetch products:', err);
-        setProducts([]);
-      });
+    fetchPublicProducts().then(data => {
+      if (Array.isArray(data)) {
+        setProducts(data);
+      }
+    });
   }, []);
 
   const navGroups = [
@@ -74,9 +66,6 @@ export function Sidebar({ isOpen, onClose, activeSection }: SidebarProps) {
       items: [
         { id: 'legal', label: 'Legal Documents', path: lastSelected ? `/legal/${lastSelected}` : '/legal' },
         { id: 'subprocessors', label: 'Subprocessors', path: lastSelected ? `/subprocessors/${lastSelected}` : '/subprocessors' },
-        { id: 'nda', label: 'Non-Disclosure Agreement (NDA)', path: '/nda' },
-        { id: 'privacy', label: 'Privacy Notice', path: '/privacy' },
-        { id: 'cookies', label: 'Cookie Statement', path: '/cookies' },
       ]
     }
   ];
@@ -85,7 +74,6 @@ export function Sidebar({ isOpen, onClose, activeSection }: SidebarProps) {
     return items.filter(item => {
       if (user?.role === 'admin' || user?.role === 'moderator') return true;
       if (publicPages.includes(item.id)) return true;
-      if (['nda', 'privacy', 'cookies'].includes(item.id)) return true;
       if (user?.role === 'viewer' && user.allowedModules?.includes(item.id)) return true;
       return false;
     });
@@ -176,21 +164,6 @@ export function Sidebar({ isOpen, onClose, activeSection }: SidebarProps) {
                     }`}
                   >
                     KPI Dashboard
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    to="/admin#activity-log"
-                    onClick={() => {
-                      onClose();
-                      setTimeout(() => {
-                        const el = document.getElementById('activity-log');
-                        if (el) el.scrollIntoView({ behavior: 'smooth' });
-                      }, 100);
-                    }}
-                    className="block px-3 py-2.5 rounded-md text-base font-medium transition-colors text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                  >
-                    Activity Log
                   </Link>
                 </li>
               </ul>

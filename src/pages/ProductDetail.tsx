@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useRequestAccess } from '../contexts/RequestAccessContext';
 import { COUNTRIES } from '../constants';
 import { setLastSelectedProduct } from '../utils/productSelection';
+import { fetchPublicProducts, fetchJson } from '../utils/api';
 
 const categoryIcons: Record<string, React.ReactNode> = {
   'Hosting': <Server className="w-4 h-4" />,
@@ -110,80 +111,52 @@ export function ProductDetail() {
     setIsLoading(true);
     try {
       const qs = country !== 'all' ? `?country=${country}` : '';
-      const [prodRes, docsRes, subsRes, secRes, ctrlRes, certRes, polRes, genRes] = await Promise.all([
-        fetch('/api/public/products'),
-        fetch(`/api/public/product-legal/${slug}${qs}`),
-        fetch(`/api/public/product-subprocessors/${slug}${qs}`),
-        fetch(`/api/public/product-security/${slug}`),
-        fetch(`/api/public/product-controls/${slug}`),
-        fetch(`/api/public/product-certifications/${slug}`),
-        fetch(`/api/public/product-policies/${slug}${qs}`),
-        fetch(`/api/public/product-general/${slug}`)
+      const [allProducts, legalDocs, subsData, secData, ctrlData, certData, polData, genData] = await Promise.all([
+        fetchPublicProducts(),
+        fetchJson<any[]>(`/api/public/product-legal/${slug}${qs}`).catch(() => []),
+        fetchJson<any>(`/api/public/product-subprocessors/${slug}${qs}`).catch(() => ({})),
+        fetchJson<any>(`/api/public/product-security/${slug}`).catch(() => null),
+        fetchJson<any[]>(`/api/public/product-controls/${slug}`).catch(() => []),
+        fetchJson<any>(`/api/public/product-certifications/${slug}`).catch(() => ({})),
+        fetchJson<any[]>(`/api/public/product-policies/${slug}${qs}`).catch(() => []),
+        fetchJson<any>(`/api/public/product-general/${slug}`).catch(() => null)
       ]);
 
-      if (prodRes.ok) {
-        const allProducts = await prodRes.json();
-        const found = allProducts.find((p: any) => p.slug === slug);
-        setProduct(found);
-        if (found) {
-          setEditForm({
-            name: found.name,
-            category: found.category,
-            status_url: found.status_url,
-            color: found.color,
-            countries: found.countries || []
-          });
-        }
-      }
-      
-      if (docsRes.ok) {
-        setRelatedDocs(await docsRes.json());
-      }
-      
-      if (subsRes.ok) {
-        const subData = await subsRes.json();
-        setRelatedSubprocessors(subData.subprocessors || []);
+      const found = Array.isArray(allProducts) ? allProducts.find((p: any) => p.slug === slug) : null;
+      setProduct(found);
+      if (found) {
+        setEditForm({
+          name: found.name,
+          category: found.category,
+          status_url: found.status_url,
+          color: found.color,
+          countries: found.countries || []
+        });
       }
 
-      if (secRes.ok) {
-        // Will return { error: ... } if not found, we check if there's no error
-        const data = await secRes.json();
-        if (data && !data.error) setSecurityData(data);
-        else setSecurityData(null);
-      }
-
-      if (ctrlRes.ok) {
-        setControls(await ctrlRes.json());
-      }
-
-      if (certRes.ok) {
-        const certData = await certRes.json();
-        setCertifications(certData.certifications || []);
-      }
-
-      if (polRes.ok) {
-        setPolicies(await polRes.json());
-      }
-
-      if (genRes.ok) {
-        const genData = await genRes.json();
+      if (Array.isArray(legalDocs)) setRelatedDocs(legalDocs);
+      if (subsData && Array.isArray(subsData.subprocessors)) setRelatedSubprocessors(subsData.subprocessors);
+      if (secData && !secData.error) setSecurityData(secData);
+      else setSecurityData(null);
+      if (Array.isArray(ctrlData)) setControls(ctrlData);
+      if (certData && Array.isArray(certData.certifications)) setCertifications(certData.certifications);
+      if (Array.isArray(polData)) setPolicies(polData);
+      if (genData) {
         setGeneralInfo(genData);
-        if (genData) {
-          setGeneralForm({
-            office_location: genData.office_location || '',
-            contact_info: genData.contact_info || '',
-            opening_hours: genData.opening_hours || ''
-          });
-        } else {
-          setGeneralForm({
-            office_location: '',
-            contact_info: '',
-            opening_hours: ''
-          });
-        }
+        setGeneralForm({
+          office_location: genData.office_location || '',
+          contact_info: genData.contact_info || '',
+          opening_hours: genData.opening_hours || ''
+        });
+      } else {
+        setGeneralForm({
+          office_location: '',
+          contact_info: '',
+          opening_hours: ''
+        });
       }
     } catch (err) {
-      console.error('Failed to fetch product data', err);
+      console.warn('Could not fetch product detail data:', err);
     } finally {
       setIsLoading(false);
     }
@@ -331,14 +304,16 @@ export function ProductDetail() {
           <div>
             <div className="flex flex-wrap items-center gap-3 mb-1">
               <h1 className="text-3xl font-bold text-slate-900 tracking-tight">{product.name}</h1>
-              <a 
-                href={product.status_url} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-sm font-medium text-blue-600 hover:text-blue-800 flex items-center gap-1 bg-blue-50 px-3 py-1 rounded-full border border-blue-100"
-              >
-                View System Status <ExternalLink className="w-3 h-3" />
-              </a>
+              {product.status_url && product.status_url.trim() !== '' && (
+                <a 
+                  href={product.status_url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-sm font-medium text-blue-600 hover:text-blue-800 flex items-center gap-1 bg-blue-50 px-3 py-1 rounded-full border border-blue-100"
+                >
+                  View System Status <ExternalLink className="w-3 h-3" />
+                </a>
+              )}
             </div>
             <p className="text-slate-500 font-medium uppercase tracking-wider text-sm">{product.category}</p>
             {product.countries && product.countries.length > 0 && (
@@ -414,13 +389,20 @@ export function ProductDetail() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Status Page URL</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-medium text-slate-700">Status Page URL</label>
+                  <span className="text-xs text-slate-400">Optional</span>
+                </div>
                 <input 
                   type="url" 
                   value={editForm.status_url}
                   onChange={e => setEditForm({...editForm, status_url: e.target.value})}
+                  placeholder="https://status.yourproduct.com"
                   className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                <p className="text-xs text-slate-500 mt-1">
+                  Leave empty if this product does not have an external status page. Only products with a filled-in URL will display a "Status Page" link.
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Brand Color</label>

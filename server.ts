@@ -8,6 +8,7 @@ import authRoutes from './server/routes/auth.js';
 import adminRoutes from './server/routes/admin.js';
 import { escapeHtml, sanitizeUrl } from './server/utils/html.js';
 import { logActivity } from './server/utils/activity.js';
+import { generateSubprocessorsPdf } from './server/utils/subprocessorsPdf.js';
 
 async function startServer() {
   const app = express();
@@ -49,6 +50,10 @@ async function startServer() {
   }, express.static('public/uploads'));
 
   // API Routes
+  app.use('/api', (req, res, next) => {
+    res.setHeader('Content-Type', 'application/json');
+    next();
+  });
   app.use('/api', apiLimiter);
   app.use('/api/auth', authRoutes);
   app.use('/api/admin', adminRoutes);
@@ -153,8 +158,11 @@ async function startServer() {
         LEFT JOIN product_certification_summary pcs ON p.slug = pcs.product_slug
       `;
       const params: any[] = [];
-      if (country) {
-        query += ` JOIN product_countries pc ON p.slug = pc.product_slug WHERE pc.country = ?`;
+      if (country && country !== 'all') {
+        query += ` WHERE (
+          EXISTS (SELECT 1 FROM product_countries pc WHERE pc.product_slug = p.slug AND pc.country = ?)
+          OR NOT EXISTS (SELECT 1 FROM product_countries pc WHERE pc.product_slug = p.slug)
+        )`;
         params.push(country);
       }
       const [products]: any = await pool.query(query, params);
@@ -1246,6 +1254,547 @@ async function startServer() {
     }
   });
 
+  app.get('/api/public/subprocessors-pdf/:slug', async (req, res) => {
+    try {
+      const slug = req.params.slug;
+      const country = req.query.country as string;
+
+      const [productRows]: any = await pool.query('SELECT * FROM products WHERE slug = ?', [slug]);
+      if (!productRows || productRows.length === 0) {
+        return res.status(404).json({ error: 'Product Not Found' });
+      }
+      const product = productRows[0];
+
+      let querySub = 'SELECT * FROM product_subprocessors WHERE product_slug = ?';
+      const paramsSub: any[] = [slug];
+      if (country && country !== 'all') {
+        querySub = `
+          SELECT s.*
+          FROM product_subprocessors s
+          JOIN subprocessor_countries sc ON s.id = sc.subprocessor_id
+          WHERE s.product_slug = ? AND sc.country = ?
+        `;
+        paramsSub.push(country);
+      }
+      const [subprocessors]: any = await pool.query(querySub, paramsSub);
+
+      const [subCountries]: any = await pool.query('SELECT subprocessor_id, country FROM subprocessor_countries');
+      const subprocessorsWithCountries = subprocessors.map((s: any) => ({
+        ...s,
+        countries: subCountries.filter((c: any) => c.subprocessor_id === s.id).map((c: any) => c.country)
+      }));
+
+      const [historyRows]: any = await pool.query('SELECT * FROM subprocessor_history WHERE product_slug = ? ORDER BY date DESC', [slug]);
+      const history = historyRows || [];
+
+      const [settingsRows]: any = await pool.query('SELECT "key", "value" FROM dashboard_settings');
+      const settings: any = {};
+      for (const s of settingsRows as any[]) {
+        try {
+          settings[s.key] = JSON.parse(s.value);
+        } catch (e) {
+          settings[s.key] = s.value;
+        }
+      }
+
+      const pdfBytes = await generateSubprocessorsPdf({
+        product,
+        subprocessors: subprocessorsWithCountries,
+        history,
+        settings,
+        country
+      });
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${slug}-authorized-subprocessors.pdf"`);
+      res.setHeader('Content-Length', pdfBytes.length);
+      res.end(Buffer.from(pdfBytes));
+    } catch (err) {
+      console.error('Error generating subprocessors PDF:', err);
+      res.status(500).json({ error: 'Failed to generate PDF document' });
+    }
+  });
+
+  app.get('/api/public/subprocessors-whitepaper/:slug', async (req, res) => {
+    try {
+      const slug = req.params.slug;
+      const country = req.query.country as string;
+
+      const [productRows]: any = await pool.query('SELECT * FROM products WHERE slug = ?', [slug]);
+      if (!productRows || productRows.length === 0) {
+        return res.status(404).send('<h1>Product Not Found</h1>');
+      }
+      const product = productRows[0];
+
+      // Fetch subprocessors with country filtering if query parameter is provided
+      let querySub = 'SELECT * FROM product_subprocessors WHERE product_slug = ?';
+      const paramsSub: any[] = [slug];
+      if (country && country !== 'all') {
+        querySub = `
+          SELECT s.*
+          FROM product_subprocessors s
+          JOIN subprocessor_countries sc ON s.id = sc.subprocessor_id
+          WHERE s.product_slug = ? AND sc.country = ?
+        `;
+        paramsSub.push(country);
+      }
+      const [subprocessors]: any = await pool.query(querySub, paramsSub);
+
+      // Fetch countries for all subprocessors
+      const [subCountries]: any = await pool.query('SELECT subprocessor_id, country FROM subprocessor_countries');
+      const subprocessorsWithCountries = subprocessors.map((s: any) => ({
+        ...s,
+        countries: subCountries.filter((c: any) => c.subprocessor_id === s.id).map((c: any) => c.country)
+      }));
+
+      // Fetch history / alteration registry
+      const [historyRows]: any = await pool.query('SELECT * FROM subprocessor_history WHERE product_slug = ? ORDER BY date DESC', [slug]);
+      const history = historyRows || [];
+
+      // Fetch site settings
+      const [settingsRows]: any = await pool.query('SELECT "key", "value" FROM dashboard_settings');
+      const settings: any = {};
+      for (const s of settingsRows as any[]) {
+        try {
+          settings[s.key] = JSON.parse(s.value);
+        } catch (e) {
+          settings[s.key] = s.value;
+        }
+      }
+
+      const siteName = settings.site_name || 'Bjorn Lunden';
+      const mailtoLegal = settings.mailto_legal || 'security@bjornlunden.com';
+      const dateStr = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+      const scopeStr = country && country !== 'all' ? `Filtered by Jurisdiction: ${country.toUpperCase()}` : 'Global Jurisdiction (All Scope)';
+
+      const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(product.name)} - Authorized Subprocessors &amp; Registry of Alterations</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #0f172a;
+      --primary-accent: #2563eb;
+      --border-color: #cbd5e1;
+      --text-dark: #0f172a;
+      --text-muted: #475569;
+      --bg-slate: #f8fafc;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background-color: #f1f5f9;
+      color: var(--text-dark);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 9pt;
+      line-height: 1.5;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .screen-wrapper {
+      max-width: 1040px;
+      margin: 30px auto;
+      padding: 0 16px;
+    }
+    .screen-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 20px;
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    }
+    .btn-print {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background-color: #0f172a;
+      color: #ffffff;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background-color 0.15s ease;
+    }
+    .btn-print:hover {
+      background-color: #1e293b;
+    }
+    .btn-back {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .btn-back:hover {
+      color: #0f172a;
+    }
+    .document-page {
+      background: #ffffff;
+      padding: 40px;
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+    }
+    .header-section {
+      border-bottom: 2px solid #0f172a;
+      padding-bottom: 20px;
+      margin-bottom: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 20px;
+    }
+    .header-left h1 {
+      font-size: 20pt;
+      font-weight: 800;
+      color: #0f172a;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+    }
+    .header-left .product-badge {
+      display: inline-block;
+      margin-top: 6px;
+      font-size: 11pt;
+      font-weight: 700;
+      color: #2563eb;
+    }
+    .header-left .meta-text {
+      color: var(--text-muted);
+      font-size: 8.5pt;
+      margin-top: 4px;
+    }
+    .header-right {
+      text-align: right;
+      font-size: 8pt;
+      color: var(--text-muted);
+    }
+    .header-right .certified-badge {
+      display: inline-block;
+      background: #ecfdf5;
+      color: #065f46;
+      border: 1px solid #a7f3d0;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 8pt;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+    .notice-box {
+      background-color: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-left: 4px solid #2563eb;
+      padding: 12px 16px;
+      border-radius: 6px;
+      font-size: 8.5pt;
+      color: #334155;
+      margin-bottom: 28px;
+      line-height: 1.5;
+    }
+    .section-title {
+      font-size: 13pt;
+      font-weight: 700;
+      color: #0f172a;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 8px;
+      margin-top: 24px;
+      margin-bottom: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+    .section-title span.count {
+      font-size: 9pt;
+      font-weight: 600;
+      color: #64748b;
+    }
+    table.data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 8.5pt;
+      margin-bottom: 28px;
+      page-break-inside: auto;
+    }
+    table.data-table tr {
+      page-break-inside: avoid;
+      page-break-after: auto;
+    }
+    table.data-table th {
+      background-color: #f8fafc;
+      color: #334155;
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 7.5pt;
+      letter-spacing: 0.05em;
+      padding: 10px 8px;
+      border: 1px solid #cbd5e1;
+      text-align: left;
+    }
+    table.data-table td {
+      padding: 10px 8px;
+      border: 1px solid #e2e8f0;
+      vertical-align: top;
+      color: #1e293b;
+    }
+    table.data-table tr:nth-child(even) td {
+      background-color: #fafbfc;
+    }
+    .sub-name {
+      font-weight: 700;
+      color: #0f172a;
+      font-size: 9pt;
+    }
+    .sub-meta {
+      font-size: 7.5pt;
+      color: #64748b;
+      margin-top: 2px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 7pt;
+      font-weight: 600;
+      border: 1px solid #cbd5e1;
+      background: #f1f5f9;
+      color: #475569;
+      margin: 1px;
+    }
+    .badge-safeguard {
+      background: #eff6ff;
+      border-color: #bfdbfe;
+      color: #1e40af;
+    }
+    .doc-footer {
+      border-top: 1px solid #cbd5e1;
+      padding-top: 14px;
+      margin-top: 30px;
+      font-size: 8pt;
+      color: #64748b;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    @media print {
+      @page {
+        size: A4 portrait;
+        margin: 12mm 12mm 15mm 12mm;
+      }
+      body {
+        background-color: #ffffff !important;
+      }
+      .screen-wrapper {
+        margin: 0 !important;
+        padding: 0 !important;
+        max-width: 100% !important;
+      }
+      .screen-controls {
+        display: none !important;
+      }
+      .document-page {
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+      }
+      table.data-table th {
+        background-color: #f1f5f9 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+    }
+  </style>
+  <script>
+    window.onload = function() {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('print') === 'true' || urlParams.get('autoprint') !== 'false') {
+        setTimeout(function() {
+          window.print();
+        }, 500);
+      }
+    };
+  </script>
+</head>
+<body>
+  <div class="screen-wrapper">
+    <div class="screen-controls">
+      <a href="/subprocessors/${escapeHtml(slug)}" class="btn-back">
+        ← Back to ${escapeHtml(product.name)} Subprocessors
+      </a>
+      <div style="display: flex; gap: 10px; align-items: center;">
+        <a href="/api/public/subprocessors-pdf/${escapeHtml(slug)}${country && country !== 'all' ? `?country=${escapeHtml(country)}` : ''}" class="btn-print" style="background-color: #2563eb;" download="${escapeHtml(slug)}-authorized-subprocessors.pdf">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          Download PDF
+        </a>
+        <button onclick="window.print()" class="btn-print">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 6 2 18 2 18 9"></polyline>
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+            <rect x="6" y="14" width="12" height="8"></rect>
+          </svg>
+          Print / Save PDF
+        </button>
+      </div>
+    </div>
+
+    <div class="document-page">
+      <div class="header-section">
+        <div class="header-left">
+          <div style="font-size: 8.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #2563eb; margin-bottom: 4px;">
+            ${escapeHtml(siteName)} Trust Center
+          </div>
+          <h1>Authorized Subprocessors &amp; Alterations</h1>
+          <div class="product-badge">Product: ${escapeHtml(product.name)}</div>
+          <div class="meta-text">${escapeHtml(scopeStr)} • Published under GDPR Article 28</div>
+        </div>
+        <div class="header-right">
+          <div class="certified-badge">Certified Registry</div>
+          <div>Date: <strong>${escapeHtml(dateStr)}</strong></div>
+          <div style="margin-top: 3px;">Reference: SUB-${escapeHtml(product.slug).toUpperCase()}</div>
+          <div style="margin-top: 3px;">Contact: <a href="mailto:${escapeHtml(mailtoLegal)}" style="color: inherit;">${escapeHtml(mailtoLegal)}</a></div>
+        </div>
+      </div>
+
+      <div class="notice-box">
+        <strong>Legal Disclosure &amp; Scope:</strong> This document certifies all current authorized third-party subprocessors engaged to support data processing activities for <strong>${escapeHtml(product.name)}</strong>, together with the official registry of historical alterations. Pursuant to applicable Data Processing Agreements and GDPR standards, all listed entities are contractually bound to confidentiality, data security, and compliance guarantees at least as stringent as those agreed with the customer.
+      </div>
+
+      <!-- SECTION 1: CURRENT AUTHORIZED SUBPROCESSORS -->
+      <div class="section-title">
+        <span>1. Current Authorized Subprocessors</span>
+        <span class="count">${subprocessorsWithCountries.length} Entity${subprocessorsWithCountries.length === 1 ? '' : 'ies'} Registered</span>
+      </div>
+
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th style="width: 22%;">Subprocessor / Identity</th>
+            <th style="width: 14%;">Category</th>
+            <th style="width: 26%;">Processing Activities &amp; Purpose</th>
+            <th style="width: 18%;">Location &amp; Scope</th>
+            <th style="width: 20%;">Safeguards &amp; Certifications</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${subprocessorsWithCountries.map((sub: any) => `
+            <tr>
+              <td>
+                <div class="sub-name">${escapeHtml(sub.name)}</div>
+                ${sub.org_number ? `<div class="sub-meta">Org: ${escapeHtml(sub.org_number)}</div>` : ''}
+                ${sub.lei_number ? `<div class="sub-meta">LEI: ${escapeHtml(sub.lei_number)}</div>` : ''}
+                ${sub.contact_details ? `<div class="sub-meta">${escapeHtml(sub.contact_details)}</div>` : ''}
+              </td>
+              <td>
+                <span class="badge">${escapeHtml(sub.category || 'Service Provider')}</span>
+              </td>
+              <td>
+                <div style="font-weight: 600; color: #1e293b;">${escapeHtml(sub.purpose || 'Infrastructure & Processing')}</div>
+                ${sub.nature_of_processing ? `<div class="sub-meta" style="margin-top: 4px;"><em>${escapeHtml(sub.nature_of_processing)}</em></div>` : ''}
+                ${sub.data_categories ? `<div class="sub-meta" style="margin-top: 3px;"><strong>Data:</strong> ${escapeHtml(sub.data_categories)}</div>` : ''}
+              </td>
+              <td>
+                <div><strong>${escapeHtml(sub.region || 'EU / Global')}</strong></div>
+                ${sub.countries && sub.countries.length > 0 ? `
+                  <div style="margin-top: 4px;">
+                    ${sub.countries.map((c: string) => `<span class="badge">${escapeHtml(c.toUpperCase())}</span>`).join(' ')}
+                  </div>
+                ` : ''}
+                ${sub.retention ? `<div class="sub-meta" style="margin-top: 3px;"><strong>Retention:</strong> ${escapeHtml(sub.retention)}</div>` : ''}
+              </td>
+              <td>
+                <div>${sub.security_measures ? escapeHtml(sub.security_measures) : 'Technical &amp; organizational controls'}</div>
+                ${sub.certifications ? `<div class="sub-meta" style="color: #065f46; font-weight: 600; margin-top: 4px;">🛡️ ${escapeHtml(sub.certifications)}</div>` : ''}
+                ${sub.transfers ? `<div class="sub-meta" style="margin-top: 3px;"><span class="badge badge-safeguard">${escapeHtml(sub.transfers)}</span></div>` : ''}
+                <div class="sub-meta" style="margin-top: 3px;">DPA: ${sub.dpa_url ? 'Executed &amp; Verified' : sub.dpa_requestable ? 'Available on Request' : 'Standard Art. 28 Terms'}</div>
+              </td>
+            </tr>
+          `).join('')}
+          ${subprocessorsWithCountries.length === 0 ? `
+            <tr>
+              <td colspan="5" style="text-align: center; color: #94a3b8; padding: 24px;">No subprocessors registered for this product.</td>
+            </tr>
+          ` : ''}
+        </tbody>
+      </table>
+
+      <!-- SECTION 2: REGISTRY OF ALTERATIONS -->
+      <div class="section-title">
+        <span>2. Registry of Alterations</span>
+        <span class="count">${history.length} Record${history.length === 1 ? '' : 's'}</span>
+      </div>
+
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th style="width: 14%;">Version</th>
+            <th style="width: 18%;">Effective Date</th>
+            <th style="width: 68%;">Description of Alteration &amp; Change Log</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${history.map((h: any) => `
+            <tr>
+              <td>
+                <span class="badge" style="font-family: monospace; font-weight: 700; font-size: 8.5pt;">v${escapeHtml(h.version)}</span>
+              </td>
+              <td style="font-weight: 600; color: #334155;">
+                ${escapeHtml(h.date)}
+              </td>
+              <td style="line-height: 1.5; color: #1e293b;">
+                ${escapeHtml(h.description)}
+              </td>
+            </tr>
+          `).join('')}
+          ${history.length === 0 ? `
+            <tr>
+              <td colspan="3" style="text-align: center; color: #94a3b8; padding: 20px;">No historical alterations recorded for this product.</td>
+            </tr>
+          ` : ''}
+        </tbody>
+      </table>
+
+      <div class="doc-footer">
+        <div>
+          <span>${escapeHtml(siteName)} Trust Center</span> • Official Compliance Publication • ${escapeHtml(product.name)}
+        </div>
+        <div>
+          Inquiries: <a href="mailto:${escapeHtml(mailtoLegal)}" style="color: #2563eb; text-decoration: none;">${escapeHtml(mailtoLegal)}</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+      res.setHeader('Content-Type', 'text/html');
+      res.send(html);
+    } catch (err) {
+      console.error('Error generating subprocessors whitepaper:', err);
+      res.status(500).send('<h1>Internal Server Error</h1><p>Failed to generate subprocessors whitepaper.</p>');
+    }
+  });
+
   app.get('/api/public/product-certifications/:slug', async (req, res) => {
     try {
       const slug = req.params.slug;
@@ -1350,21 +1899,133 @@ async function startServer() {
     }
   });
 
+  app.post('/api/public/subscribe', async (req, res) => {
+    try {
+      const { email, type = 'controls', product_slug } = req.body;
+      if (!email || !product_slug) {
+        return res.status(400).json({ error: 'Email and product are required' });
+      }
+
+      const cleanEmail = email.trim().toLowerCase();
+      const [existing]: any = await pool.query(
+        'SELECT id, status FROM subscriptions WHERE email = ? AND type = ? AND product_slug = ?',
+        [cleanEmail, type, product_slug]
+      );
+
+      if (existing && existing.length > 0) {
+        await pool.query('UPDATE subscriptions SET status = ? WHERE id = ?', ['active', existing[0].id]);
+        return res.json({ success: true, message: 'Subscription updated to active', status: 'active' });
+      }
+
+      await pool.query(
+        'INSERT INTO subscriptions (email, type, product_slug, status) VALUES (?, ?, ?, ?)',
+        [cleanEmail, type, product_slug, 'active']
+      );
+
+      // Track metric
+      await pool.query(
+        'INSERT INTO metrics_events (event_type, product_slug, item_name, user_email) VALUES (?, ?, ?, ?)',
+        ['subscription', product_slug, `${type}_subscription`, cleanEmail]
+      ).catch(() => {});
+
+      res.json({ success: true, message: 'Subscription successful', status: 'active' });
+    } catch (err) {
+      console.error('Error in public subscribe:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  app.post('/api/public/unsubscribe', async (req, res) => {
+    try {
+      const { email, type = 'controls', product_slug } = req.body;
+      if (!email || !product_slug) {
+        return res.status(400).json({ error: 'Email and product are required' });
+      }
+
+      const cleanEmail = email.trim().toLowerCase();
+      await pool.query(
+        'UPDATE subscriptions SET status = ? WHERE email = ? AND type = ? AND product_slug = ?',
+        ['cancelled', cleanEmail, type, product_slug]
+      );
+
+      res.json({ success: true, message: 'Subscription cancelled', status: 'cancelled' });
+    } catch (err) {
+      console.error('Error in public unsubscribe:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  app.get('/api/public/subscription-stats', async (req, res) => {
+    try {
+      const { product_slug, type = 'controls' } = req.query;
+      let query = 'SELECT status, count(*) as count FROM subscriptions WHERE type = ?';
+      const params: any[] = [type];
+      if (product_slug && product_slug !== 'all') {
+        query += ' AND product_slug = ?';
+        params.push(product_slug);
+      }
+      query += ' GROUP BY status';
+
+      const [rows]: any = await pool.query(query, params);
+      const stats = { active: 0, paused: 0, cancelled: 0, total: 0 };
+      if (Array.isArray(rows)) {
+        for (const r of rows) {
+          const c = Number(r.count) || 0;
+          if (r.status === 'active') stats.active += c;
+          else if (r.status === 'paused') stats.paused += c;
+          else if (r.status === 'cancelled') stats.cancelled += c;
+          stats.total += c;
+        }
+      }
+      res.json(stats);
+    } catch (err) {
+      console.error('Error getting subscription stats:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   app.get('/api/public/dashboard-documents', async (req, res) => {
     try {
       const unifiedDocs: any[] = [];
+      const [productsRows]: any = await pool.query('SELECT slug, name FROM products');
+      const productMap: Record<string, string> = {};
+      for (const pr of productsRows) {
+        productMap[pr.slug] = pr.name;
+      }
+
+      const [certs]: any = await pool.query('SELECT * FROM product_certifications');
+      for (const c of certs) {
+        const prodName = productMap[c.product_slug] || c.product_slug;
+        unifiedDocs.push({
+          id: `cert-${c.id}`,
+          slug: `cert-${c.id}`,
+          name: c.name,
+          product_name: prodName,
+          type: c.type === 'report' ? 'Audit Report' : 'Certification',
+          category: 'Certifications & Reports',
+          requires_nda: (!c.certificate_url && c.soa_available === 1) ? 1 : 0,
+          soa_available: c.soa_available === 1,
+          products: [c.product_slug],
+          url: c.certificate_url || null,
+          description: `${c.type === 'report' ? 'Independent Audit Report' : 'Compliance Certification'}`,
+          source: 'certification'
+        });
+      }
       
       const [docs]: any = await pool.query('SELECT * FROM documents');
       for (const d of docs) {
         if (!d.url && (d.requires_nda === 0 || d.requires_nda === false || d.requires_nda === '0')) continue;
+        const prods = JSON.parse(d.products || '[]');
+        const prodName = prods.map((s: string) => productMap[s] || s).filter(Boolean).join(', ');
         unifiedDocs.push({
           id: `doc-${d.id}`,
           slug: d.slug,
           name: d.name,
+          product_name: prodName,
           type: d.type || 'Document',
           category: d.category || 'General',
           requires_nda: d.requires_nda,
-          products: JSON.parse(d.products || '[]'),
+          products: prods,
           url: d.url,
           description: d.description,
           source: 'document'
@@ -1373,16 +2034,18 @@ async function startServer() {
 
       const [policies]: any = await pool.query('SELECT * FROM product_policies');
       for (const p of policies) {
-        if (p.is_requestable !== 1 && p.is_requestable !== true && p.is_requestable !== '1') continue;
+        if (p.is_requestable !== 1 && p.is_requestable !== true && p.is_requestable !== '1' && !p.file_url) continue;
+        const prodName = productMap[p.product_slug] || p.product_slug;
         unifiedDocs.push({
           id: `pol-${p.id}`,
           slug: `policy-${p.id}`,
           name: p.name,
+          product_name: prodName,
           type: 'Policy',
           category: 'Policy',
-          requires_nda: p.is_requestable === 1 ? 1 : 0,
+          requires_nda: p.file_url ? 0 : (p.is_requestable === 1 ? 1 : 0),
           products: [p.product_slug],
-          url: null,
+          url: p.file_url || null,
           description: p.description,
           source: 'policy'
         });
@@ -1391,11 +2054,13 @@ async function startServer() {
       const [legal]: any = await pool.query('SELECT * FROM product_legal_documents');
       for (const l of legal) {
         if (!l.url && !l.file_url) continue;
+        const prodName = productMap[l.product_slug] || l.product_slug;
         unifiedDocs.push({
           id: `leg-${l.id}`,
           slug: `legal-${l.id}`,
-          name: l.name || (l.document_type === 'tc' ? 'Terms & Conditions' : l.document_type === 'privacy' ? 'Privacy Policy' : 'Legal Document'),
-          type: l.document_type === 'tc' ? 'Terms & Conditions' : l.document_type === 'privacy' ? 'Privacy Policy' : l.document_type,
+          name: l.name || (l.document_type === 'tc' ? 'Terms & Conditions' : l.document_type === 'privacy' ? 'Privacy Policy' : l.document_type === 'dpa' ? 'Data Processing Agreement (DPA)' : 'Legal Document'),
+          product_name: prodName,
+          type: l.document_type === 'tc' ? 'Terms & Conditions' : l.document_type === 'privacy' ? 'Privacy Policy' : l.document_type === 'dpa' ? 'DPA' : l.document_type,
           category: 'Legal',
           requires_nda: 0,
           products: [l.product_slug],
@@ -1407,10 +2072,12 @@ async function startServer() {
 
       const [dpa]: any = await pool.query('SELECT * FROM product_subprocessors WHERE dpa_url IS NOT NULL OR dpa_requestable = 1');
       for (const a of dpa) {
+        const prodName = productMap[a.product_slug] || a.product_slug;
         unifiedDocs.push({
           id: `dpa-${a.id}`,
           slug: `dpa-${a.id}`,
           name: `DPA - ${a.name}`,
+          product_name: prodName,
           type: 'DPA Addendum',
           category: 'Legal',
           requires_nda: a.dpa_requestable === 1 ? 1 : 0,
@@ -1519,6 +2186,28 @@ async function startServer() {
     }
 
     res.json(status);
+  });
+
+  // Catch-all for undefined /api and /api/* routes so they never fall through to Vite SPA index.html
+  app.all('/api', (req, res) => {
+    res.status(404).setHeader('Content-Type', 'application/json').json({ error: `API route not found: ${req.method} ${req.path}` });
+  });
+
+  app.all('/api/*', (req, res) => {
+    res.status(404).setHeader('Content-Type', 'application/json').json({ error: `API route not found: ${req.method} ${req.path}` });
+  });
+
+  // Global API error handler ensuring JSON is always returned for API routes
+  app.use('/api', (err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error('API Error:', err);
+    if (res.headersSent) {
+      return next(err);
+    }
+    const status = err.status || err.statusCode || 500;
+    res.status(status).setHeader('Content-Type', 'application/json').json({
+      error: err.message || 'Internal server error',
+      code: err.code || 'INTERNAL_ERROR'
+    });
   });
 
   // Vite middleware for development

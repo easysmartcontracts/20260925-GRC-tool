@@ -6,11 +6,11 @@ import { useCountry } from '../hooks/useCountry';
 import { Button } from '../components/ui/Button';
 import { COUNTRIES } from '../constants';
 import { getLastSelectedProduct, setLastSelectedProduct, resolveTargetProduct } from '../utils/productSelection';
+import { fetchPublicProducts, fetchJson } from '../utils/api';
 
 type ControlTopic = {
   id: string;
   title: string;
-  icon: React.ReactNode;
   description: string;
 };
 
@@ -18,37 +18,31 @@ const CONTROL_TOPICS: ControlTopic[] = [
   { 
     id: 'infrastructure-security', 
     title: 'Infrastructure Security', 
-    icon: <Server className="w-5 h-5 text-blue-500" />,
     description: 'Security of the physical and cloud infrastructure hosting our services.'
   },
   { 
     id: 'organization-security', 
     title: 'Organization Security', 
-    icon: <Users className="w-5 h-5 text-emerald-500" />,
     description: 'Security policies and practices at the organizational level.'
   },
   { 
     id: 'internal-security-procedures', 
     title: 'Internal Security Procedures', 
-    icon: <ClipboardList className="w-5 h-5 text-indigo-500" />,
     description: 'Standard operating procedures for maintaining internal security.'
   },
   { 
     id: 'ai-security-compliance', 
     title: 'AI Security & Compliance', 
-    icon: <Cpu className="w-5 h-5 text-amber-500" />,
     description: 'Security and regulatory compliance for our AI-driven features.'
   },
   { 
     id: 'product-security', 
     title: 'Product Security', 
-    icon: <Package className="w-5 h-5 text-rose-500" />,
     description: 'Security measures built directly into our software products.'
   },
   { 
     id: 'data-and-privacy', 
     title: 'Data and Privacy', 
-    icon: <Lock className="w-5 h-5 text-slate-500" />,
     description: 'Controls for protecting user data and ensuring privacy compliance.'
   }
 ];
@@ -72,12 +66,12 @@ export function Controls() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const country = useCountry();
 
+
+
   useEffect(() => {
-    fetch('/api/public/products')
-      .then(res => res.json())
-      .then(data => {
-        setProducts(data);
-      });
+    fetchPublicProducts().then(data => {
+      if (Array.isArray(data)) setProducts(data);
+    });
   }, []);
 
   useEffect(() => {
@@ -88,7 +82,7 @@ export function Controls() {
   }, [slug]);
 
   const displayProducts = products.filter(p => {
-    if (country !== 'all' && (!p.countries || !p.countries.includes(country))) {
+    if (country !== 'all' && p.countries && p.countries.length > 0 && !p.countries.includes(country)) {
       return false;
     }
     return true;
@@ -105,12 +99,14 @@ export function Controls() {
 
   useEffect(() => {
     if (selectedProduct) {
-      fetch(`/api/public/product-controls/${selectedProduct}`)
-        .then(res => res.json())
+      fetchJson<Control[]>(`/api/public/product-controls/${selectedProduct}`)
         .then(data => {
-          setControls(data);
-          setEditData(data);
-        });
+          if (Array.isArray(data)) {
+            setControls(data);
+            setEditData(data);
+          }
+        })
+        .catch(err => console.warn('Could not fetch controls for product:', err));
     }
   }, [selectedProduct]);
 
@@ -226,9 +222,9 @@ export function Controls() {
 
       {/* Main Layout */}
       <div className="flex flex-col lg:flex-row gap-8 items-start w-full">
-        {/* Left Sidebar (Products) */}
-        <div className="w-full lg:w-1/4 sticky top-6">
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm overflow-y-auto max-h-[calc(100vh-6rem)]">
+        {/* Left Sidebar (Products & Subscription) */}
+        <div className="w-full lg:w-1/4 sticky top-6 space-y-4">
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm overflow-y-auto max-h-[calc(100vh-16rem)]">
             <h3 className="font-semibold text-slate-900 mb-3 px-2">Select Product</h3>
             <div className="flex flex-col gap-1">
               {displayProducts.map((product) => (
@@ -254,6 +250,8 @@ export function Controls() {
               )}
             </div>
           </div>
+
+
         </div>
 
         {/* Main Content */}
@@ -277,7 +275,6 @@ export function Controls() {
             const topic = CONTROL_TOPICS.find(t => t.id === control.topic_id);
             const title = topic ? topic.title : control.topic_id;
             const topicDesc = topic ? topic.description : 'Custom security control measure.';
-            const icon = topic ? topic.icon : <ClipboardList className="w-5 h-5 text-indigo-500" />;
             const status = control.status || 'Implemented';
             const description = control.description || '';
             
@@ -293,10 +290,7 @@ export function Controls() {
                   </button>
                 )}
                 <div className="flex flex-col md:flex-row md:items-start gap-6">
-                  <div className="flex items-start gap-4 md:w-1/3">
-                    <div className="p-2 bg-slate-50 rounded-lg shrink-0" aria-hidden="true">
-                      {icon}
-                    </div>
+                  <div className="flex items-start md:w-1/3">
                     <div className="w-full">
                       {isEditing && !topic ? (
                         <input
@@ -425,6 +419,8 @@ export function Controls() {
       )}
         </div>
       </div>
+
+
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { pool } from '../db.js';
 import { getJwtSecret } from '../utils/secret.js';
 import { csrfProtection } from '../middleware/csrf.js';
 import { logActivity } from '../utils/activity.js';
+import { generateKpiPdf } from '../utils/kpiPdf.js';
 
 const router = express.Router();
 const JWT_SECRET = getJwtSecret();
@@ -110,6 +111,11 @@ const requireAdminOrMod = (req: any, res: any, next: any) => {
         token = headerToken;
       }
     }
+  }
+
+  // Also check query param token for direct downloads / printable PDFs
+  if (!token && req.query.token && typeof req.query.token === 'string') {
+    token = req.query.token;
   }
 
   // Sanitize token
@@ -352,12 +358,15 @@ router.post('/products', async (req, res) => {
       await conn.query(`INSERT INTO product_countries (product_slug, country) VALUES ${placeholders}`, values);
     }
     
+    // Ensure product is public by default for visitor preview
+    await conn.query('INSERT OR IGNORE INTO pages (id, is_public) VALUES (?, 1)', ['product-' + slug]);
+    
     await conn.commit();
     res.json({ success: true });
   } catch (err: any) {
     await conn.rollback();
     console.error('Create product error:', err);
-    if (err.code === 'SQLITE_CONSTRAINT') {
+    if (err.code === 'SQLITE_CONSTRAINT' || err.message?.includes('UNIQUE constraint failed') || err.message?.includes('products.slug')) {
       return res.status(400).json({ error: 'Product slug already exists' });
     }
     res.status(500).json({ error: err.message || 'Database error' });
@@ -998,6 +1007,78 @@ router.get('/metrics', async (req, res) => {
   }
 });
 
+// Executive KPI Report PDF endpoint
+router.get('/kpi-pdf', async (req: any, res) => {
+  try {
+    const product = (req.query.product as string) || 'all';
+    const start = req.query.start as string;
+    const end = req.query.end as string;
+
+    // Fetch metrics events
+    const [metricRows]: any = await pool.query('SELECT * FROM metrics_events ORDER BY created_at DESC');
+    let metrics = metricRows || [];
+
+    // Fetch access requests
+    const [requestRows]: any = await pool.query('SELECT * FROM access_requests ORDER BY created_at DESC');
+    let accessRequests = requestRows || [];
+
+    // Filter by product
+    if (product && product !== 'all') {
+      if (product === 'general') {
+        metrics = metrics.filter((m: any) => m.product_slug === 'general' || !m.product_slug);
+        accessRequests = accessRequests.filter((r: any) => r.product_slug === 'general' || !r.product_slug);
+      } else {
+        metrics = metrics.filter((m: any) => m.product_slug === product);
+        accessRequests = accessRequests.filter((r: any) => r.product_slug === product);
+      }
+    }
+
+    // Filter by date
+    if (start) {
+      const startDate = new Date(start);
+      startDate.setHours(0, 0, 0, 0);
+      metrics = metrics.filter((m: any) => new Date(m.created_at) >= startDate);
+      accessRequests = accessRequests.filter((r: any) => new Date(r.created_at) >= startDate);
+    }
+    if (end) {
+      const endDate = new Date(end);
+      endDate.setHours(23, 59, 59, 999);
+      metrics = metrics.filter((m: any) => new Date(m.created_at) <= endDate);
+      accessRequests = accessRequests.filter((r: any) => new Date(r.created_at) <= endDate);
+    }
+
+    const [products]: any = await pool.query('SELECT * FROM products');
+    const [settingsRows]: any = await pool.query('SELECT "key", "value" FROM dashboard_settings');
+    const settings: any = {};
+    for (const s of (settingsRows || []) as any[]) {
+      try {
+        settings[s.key] = JSON.parse(s.value);
+      } catch (e) {
+        settings[s.key] = s.value;
+      }
+    }
+
+    const pdfBytes = await generateKpiPdf({
+      metrics,
+      accessRequests,
+      products: products || [],
+      settings,
+      productFilter: product,
+      startDate: start,
+      endDate: end
+    });
+
+    const filename = `Bjorn-Lunden-Executive-KPI-Report-${new Date().toISOString().split('T')[0]}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBytes.length);
+    res.end(Buffer.from(pdfBytes));
+  } catch (err: any) {
+    console.error('Error generating KPI PDF:', err);
+    res.status(500).json({ error: 'Failed to generate KPI PDF report' });
+  }
+});
+
 // NDA Versions endpoints
 router.get('/nda-versions', async (req, res) => {
   try {
@@ -1457,7 +1538,7 @@ router.post('/access-requests/:id/upload-and-watermark', requireAdminOrMod, uplo
         color: rgb(0.96, 0.97, 0.99),
         opacity: 0.92,
       });
-      page.drawText(`Björn Lunden Trust Center • Protected under NDA • Distribution, copying, or forwarding strictly prohibited.`, {
+      page.drawText(`Bjorn Lunden Trust Center • Protected under NDA • Distribution, copying, or forwarding strictly prohibited.`, {
         x: 15,
         y: 5,
         size: 7,
@@ -1614,7 +1695,7 @@ router.post('/access-requests/:id/generate-watermark', requireAdminOrMod, async 
         color: rgb(0.96, 0.97, 0.99),
         opacity: 0.92,
       });
-      page.drawText(`Björn Lunden Trust Center • Protected under NDA • Distribution, copying, or forwarding strictly prohibited.`, {
+      page.drawText(`Bjorn Lunden Trust Center • Protected under NDA • Distribution, copying, or forwarding strictly prohibited.`, {
         x: 15,
         y: 5,
         size: 7,
@@ -1712,6 +1793,190 @@ router.get('/activity-logs/export', async (req: any, res) => {
     res.send(csvContent);
   } catch (err: any) {
     console.error('Error exporting activity logs:', err);
+    res.status(500).json({ error: err.message || 'Database error' });
+  }
+});
+
+// Subscriptions Management
+router.get('/subscriptions', async (req, res) => {
+  try {
+    const { type, product_slug, search, status } = req.query;
+    let query = `
+      SELECT s.*, p.name as product_name, p.color as product_color 
+      FROM subscriptions s
+      LEFT JOIN products p ON s.product_slug = p.slug
+      WHERE 1=1
+    `;
+    const params: any[] = [];
+    if (type && type !== 'all') {
+      query += ' AND s.type = ?';
+      params.push(type);
+    }
+    if (product_slug && product_slug !== 'all') {
+      query += ' AND s.product_slug = ?';
+      params.push(product_slug);
+    }
+    if (status && status !== 'all') {
+      query += ' AND s.status = ?';
+      params.push(status);
+    }
+    if (search && typeof search === 'string' && search.trim() !== '') {
+      query += ' AND (s.email LIKE ? OR p.name LIKE ?)';
+      params.push(`%${search.trim()}%`, `%${search.trim()}%`);
+    }
+    query += ' ORDER BY s.created_at DESC';
+
+    const [rows]: any = await pool.query(query, params);
+    res.json(rows);
+  } catch (err: any) {
+    console.error('Error fetching subscriptions:', err);
+    res.status(500).json({ error: err.message || 'Database error' });
+  }
+});
+
+router.post('/subscriptions', async (req, res) => {
+  try {
+    const { email, type = 'controls', product_slug, status = 'active' } = req.body;
+    if (!email || !product_slug) {
+      return res.status(400).json({ error: 'Email and product are required' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+
+    const [existing]: any = await pool.query(
+      'SELECT id, status FROM subscriptions WHERE email = ? AND type = ? AND product_slug = ?',
+      [cleanEmail, type, product_slug]
+    );
+
+    if (existing && existing.length > 0) {
+      // If already exists, update status
+      await pool.query('UPDATE subscriptions SET status = ? WHERE id = ?', [status, existing[0].id]);
+      
+      logActivity({
+        type: 'settings_update',
+        action: 'update',
+        title: `Reactivated/altered subscription for '${cleanEmail}' on '${product_slug}' (${status})`,
+        actor: (req as any).user?.username || 'Admin',
+        target_type: 'subscription',
+        target_name: cleanEmail,
+        ip_address: req.ip || req.socket.remoteAddress,
+        details: { id: existing[0].id, email: cleanEmail, product_slug, status, type }
+      });
+
+      return res.json({ id: existing[0].id, updated: true, status });
+    }
+
+    const [result]: any = await pool.query(
+      'INSERT INTO subscriptions (email, type, product_slug, status) VALUES (?, ?, ?, ?)',
+      [cleanEmail, type, product_slug, status]
+    );
+
+    const newId = result.insertId || result.lastInsertRowid;
+
+    logActivity({
+      type: 'settings_update',
+      action: 'create',
+      title: `Created new ${type} subscription for '${cleanEmail}' on '${product_slug}'`,
+      actor: (req as any).user?.username || 'Admin',
+      target_type: 'subscription',
+      target_name: cleanEmail,
+      ip_address: req.ip || req.socket.remoteAddress,
+      details: { id: newId, email: cleanEmail, product_slug, status, type }
+    });
+
+    res.json({ id: newId, created: true, status });
+  } catch (err: any) {
+    console.error('Error creating subscription:', err);
+    res.status(500).json({ error: err.message || 'Database error' });
+  }
+});
+
+router.put('/subscriptions/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { email, product_slug, status, type } = req.body;
+
+    const [currentSub]: any = await pool.query('SELECT * FROM subscriptions WHERE id = ?', [id]);
+    if (!currentSub || currentSub.length === 0) {
+      return res.status(404).json({ error: 'Subscription not found' });
+    }
+    
+    const updates: string[] = [];
+    const params: any[] = [];
+    
+    if (email !== undefined) {
+      updates.push('email = ?');
+      params.push(email.trim().toLowerCase());
+    }
+    if (product_slug !== undefined) {
+      updates.push('product_slug = ?');
+      params.push(product_slug);
+    }
+    if (status !== undefined) {
+      updates.push('status = ?');
+      params.push(status);
+    }
+    if (type !== undefined) {
+      updates.push('type = ?');
+      params.push(type);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    params.push(id);
+    await pool.query(`UPDATE subscriptions SET ${updates.join(', ')} WHERE id = ?`, params);
+
+    const [updatedRow]: any = await pool.query(
+      `SELECT s.*, p.name as product_name, p.color as product_color 
+       FROM subscriptions s 
+       LEFT JOIN products p ON s.product_slug = p.slug 
+       WHERE s.id = ?`,
+      [id]
+    );
+
+    logActivity({
+      type: 'settings_update',
+      action: 'update',
+      title: `Altered subscription #${id} (${updatedRow?.[0]?.email || currentSub[0].email}) status: ${status || currentSub[0].status}`,
+      actor: (req as any).user?.username || 'Admin',
+      target_type: 'subscription',
+      target_name: updatedRow?.[0]?.email || currentSub[0].email,
+      ip_address: req.ip || req.socket.remoteAddress,
+      details: { id, changes: { email, product_slug, status, type } }
+    });
+    
+    res.json({ success: true, subscription: updatedRow?.[0] });
+  } catch (err: any) {
+    console.error('Error updating subscription:', err);
+    res.status(500).json({ error: err.message || 'Database error' });
+  }
+});
+
+router.delete('/subscriptions/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [existing]: any = await pool.query('SELECT * FROM subscriptions WHERE id = ?', [id]);
+    
+    await pool.query('DELETE FROM subscriptions WHERE id = ?', [id]);
+
+    if (existing && existing.length > 0) {
+      logActivity({
+        type: 'settings_update',
+        action: 'delete',
+        title: `Removed subscription for '${existing[0].email}' on '${existing[0].product_slug}'`,
+        actor: (req as any).user?.username || 'Admin',
+        target_type: 'subscription',
+        target_name: existing[0].email,
+        ip_address: req.ip || req.socket.remoteAddress,
+        details: { id, email: existing[0].email, product_slug: existing[0].product_slug }
+      });
+    }
+
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('Error deleting subscription:', err);
     res.status(500).json({ error: err.message || 'Database error' });
   }
 });

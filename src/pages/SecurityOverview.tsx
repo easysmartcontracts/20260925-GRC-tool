@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useCountry } from '../hooks/useCountry';
-import { Shield, Lock, Database, Key, Globe, CheckCircle2, XCircle, Activity } from 'lucide-react';
+import { Shield, Lock, Database, Key, Globe, CheckCircle2, XCircle, Activity, ChevronRight } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { getLastSelectedProduct, setLastSelectedProduct, resolveTargetProduct } from '../utils/productSelection';
+import { fetchPublicProducts, fetchJson } from '../utils/api';
 
 type SecurityTopic = {
   id: string;
@@ -104,11 +105,9 @@ export function SecurityOverview() {
   const country = useCountry();
 
   useEffect(() => {
-    fetch('/api/public/products')
-      .then(res => res.json())
-      .then(data => {
-        setProducts(data);
-      });
+    fetchPublicProducts().then(data => {
+      if (Array.isArray(data)) setProducts(data);
+    });
   }, []);
 
   useEffect(() => {
@@ -119,7 +118,7 @@ export function SecurityOverview() {
   }, [slug]);
 
   const displayProducts = products.filter(p => {
-    if (country !== 'all' && (!p.countries || !p.countries.includes(country))) {
+    if (country !== 'all' && p.countries && p.countries.length > 0 && !p.countries.includes(country)) {
       return false;
     }
     return true;
@@ -141,19 +140,21 @@ export function SecurityOverview() {
 
   useEffect(() => {
     if (selectedProduct) {
-      fetch(`/api/public/product-security/${selectedProduct}`)
-        .then(res => res.json())
+      fetchJson(`/api/public/product-security/${selectedProduct}`)
         .then(data => {
-          setProductSecurity(data);
-          setEditData(data || {
-            backup: '',
-            mfa: false,
-            encryption: '',
-            sso: false,
-            data_residency: '',
-            sla_uptime: ''
-          });
-        });
+          if (data) {
+            setProductSecurity(data);
+            setEditData(data || {
+              backup: '',
+              mfa: false,
+              encryption: '',
+              sso: false,
+              data_residency: '',
+              sla_uptime: ''
+            });
+          }
+        })
+        .catch(err => console.warn('Could not fetch product security:', err));
     }
   }, [selectedProduct]);
 
@@ -264,8 +265,8 @@ export function SecurityOverview() {
       {/* Main Layout */}
       <div className="flex flex-col lg:flex-row gap-8 items-start w-full">
         {/* Left Sidebar (Products) */}
-        <div className="w-full lg:w-1/4 sticky top-6">
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm overflow-y-auto max-h-[calc(100vh-6rem)]">
+        <div className="w-full lg:w-1/4 sticky top-6 space-y-4">
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm overflow-y-auto max-h-[calc(100vh-14rem)]">
             <h3 className="font-semibold text-slate-900 mb-3 px-2">Select Product</h3>
             <div className="flex flex-col gap-1">
               {displayProducts.map((product) => (
@@ -291,6 +292,32 @@ export function SecurityOverview() {
               )}
             </div>
           </div>
+
+          {selectedProduct && (
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+              <div className="flex items-center gap-2 mb-1.5">
+                <Shield className="w-4 h-4 text-blue-600 shrink-0" />
+                <h4 className="font-bold text-sm text-slate-900">Security Controls</h4>
+              </div>
+              <p className="text-xs text-slate-600 mb-3 leading-relaxed">
+                Explore all security, infrastructure, and privacy controls implemented for{' '}
+                <span className="font-semibold text-slate-800">
+                  {displayProducts.find(p => p.slug === selectedProduct)?.name || 'this product'}
+                </span>.
+              </p>
+              <button
+                onClick={() => {
+                  setLastSelectedProduct(selectedProduct);
+                  navigate(`/controls/${selectedProduct}`);
+                }}
+                className="w-full bg-slate-900 text-white px-3.5 py-2.5 rounded-lg text-xs font-semibold hover:bg-slate-800 transition-colors shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Shield className="w-3.5 h-3.5" />
+                <span>View {displayProducts.find(p => p.slug === selectedProduct)?.name || 'Product'} Controls</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Main Content */}

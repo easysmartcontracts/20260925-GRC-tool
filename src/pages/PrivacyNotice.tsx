@@ -12,10 +12,10 @@ export function PrivacyNotice() {
 
   const defaultContent = `
     <h2>Privacy Notice</h2>
-    <p>This Privacy Notice explains how <strong>Björn Lunden AB</strong> and its group affiliates ("Björn Lunden", "we", "us", or "our") collect, process, retain, and protect personal data collected through our Trust Center, platform services, and compliance interactions.</p>
+    <p>This Privacy Notice explains how <strong>Bjorn Lunden AB</strong> and its group affiliates ("Bjorn Lunden", "we", "us", or "our") collect, process, retain, and protect personal data collected through our Trust Center, platform services, and compliance interactions.</p>
     
     <h3>1. Data Controller</h3>
-    <p>Björn Lunden AB is the data controller for the processing of personal data described in this notice, unless explicitly agreed otherwise in a separate Data Protection Agreement (DPA).</p>
+    <p>Bjorn Lunden AB is the data controller for the processing of personal data described in this notice, unless explicitly agreed otherwise in a separate Data Protection Agreement (DPA).</p>
     <p>Contact: <a href="mailto:privacy@bjornlunden.com">privacy@bjornlunden.com</a></p>
     
     <h3>2. Information We Collect</h3>
@@ -104,7 +104,7 @@ export function PrivacyNotice() {
                 Privacy Notice
               </h1>
               <p className="text-sm text-slate-600 mt-1 max-w-2xl">
-                Information on how Björn Lunden collects, handles, stores, and protects personal data across our trust platform and security services.
+                Information on how Bjorn Lunden collects, handles, stores, and protects personal data across our trust platform and security services.
               </p>
             </div>
           </div>
@@ -128,7 +128,7 @@ export function PrivacyNotice() {
         <div className="mt-12 pt-6 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-xs text-slate-500">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-green-600" />
-            <span>Björn Lunden Trust Center Official Privacy Policy</span>
+            <span>Bjorn Lunden Trust Center Official Privacy Policy</span>
           </div>
           <div>
             Questions? Contact <a href={`mailto:${siteSettings.mailto_legal || 'privacy@bjornlunden.com'}`} className="text-blue-600 font-medium hover:underline">{siteSettings.mailto_legal || 'privacy@bjornlunden.com'}</a>

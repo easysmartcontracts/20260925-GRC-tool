@@ -20,6 +20,7 @@ type AuthContextType = {
     header_text: string;
     mailto_certifications: string;
     mailto_policies: string;
+    mailto_controls: string;
     mailto_legal: string;
     privacy_notice: string;
     cookie_notice: string;
@@ -27,6 +28,7 @@ type AuthContextType = {
     nda_url: string;
     nda_version: string;
     nda_effective_date: string;
+    show_status_page_link?: boolean;
     top_bar_links: { id: string, label: string, url: string, position: 'left' | 'right', icon?: string }[];
   };
   login: (user: User) => void;
@@ -49,6 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     header_text: 'Trust Center',
     mailto_certifications: 'security@bjornlunden.com',
     mailto_policies: 'security@bjornlunden.com',
+    mailto_controls: 'security@bjornlunden.com',
     mailto_legal: 'security@bjornlunden.com',
     privacy_notice: '',
     cookie_notice: '',
@@ -56,6 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     nda_url: '',
     nda_version: '1.1.0',
     nda_effective_date: '2025-01-01',
+    show_status_page_link: true,
     top_bar_links: [] as { id: string, label: string, url: string, position: 'left' | 'right', icon?: string }[]
   });
 
@@ -86,14 +90,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (data && data.length > 0) {
           setPublicPages(data);
         } else {
-          setPublicPages(['dashboard', 'security-overview', 'dpa', 'subprocessors', 'policies', 'certifications', 'controls', 'legal']);
+          setPublicPages(['dashboard', 'security-overview', 'subprocessors', 'policies', 'certifications', 'controls', 'legal']);
         }
       } else {
-        setPublicPages(['dashboard', 'security-overview', 'dpa', 'subprocessors', 'policies', 'certifications', 'controls', 'legal']);
+        setPublicPages(['dashboard', 'security-overview', 'subprocessors', 'policies', 'certifications', 'controls', 'legal']);
       }
     } catch (err) {
       console.error('Failed to fetch public pages', err);
-      setPublicPages(['dashboard', 'security-overview', 'dpa', 'subprocessors', 'policies', 'certifications', 'controls', 'legal']);
+      setPublicPages(['dashboard', 'security-overview', 'subprocessors', 'policies', 'certifications', 'controls', 'legal']);
     }
   };
 
@@ -109,6 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           header_text: data.header_text || 'Trust Center',
           mailto_certifications: data.mailto_certifications || 'security@bjornlunden.com',
           mailto_policies: data.mailto_policies || 'security@bjornlunden.com',
+          mailto_controls: data.mailto_controls || 'security@bjornlunden.com',
           mailto_legal: data.mailto_legal || 'security@bjornlunden.com',
           privacy_notice: data.privacy_notice || '',
           cookie_notice: data.cookie_notice || '',
@@ -116,6 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           nda_url: data.nda_url || '',
           nda_version: data.nda_version || '1.1.0',
           nda_effective_date: data.nda_effective_date || '2025-01-01',
+          show_status_page_link: data.show_status_page_link === undefined ? true : (data.show_status_page_link === true || data.show_status_page_link === 'true'),
           top_bar_links: data.top_bar_links || []
         });
       }
@@ -153,11 +159,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (data && data.length > 0) {
             setPublicPages(data);
           } else {
-            setPublicPages(['dashboard', 'security-overview', 'dpa', 'subprocessors', 'policies', 'certifications', 'controls', 'legal']);
+            setPublicPages(['dashboard', 'security-overview', 'subprocessors', 'policies', 'certifications', 'controls', 'legal']);
           }
           console.log('Public pages fetched.');
         } else {
-          setPublicPages(['dashboard', 'security-overview', 'dpa', 'subprocessors', 'policies', 'certifications', 'controls', 'legal']);
+          setPublicPages(['dashboard', 'security-overview', 'subprocessors', 'policies', 'certifications', 'controls', 'legal']);
         }
 
         if (settingsRes && settingsRes.ok) {
@@ -169,6 +175,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             header_text: data.header_text || 'Trust Center',
             mailto_certifications: data.mailto_certifications || 'security@bjornlunden.com',
             mailto_policies: data.mailto_policies || 'security@bjornlunden.com',
+            mailto_controls: data.mailto_controls || 'security@bjornlunden.com',
             mailto_legal: data.mailto_legal || 'security@bjornlunden.com',
             privacy_notice: data.privacy_notice || '',
             cookie_notice: data.cookie_notice || '',
@@ -176,6 +183,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             nda_url: data.nda_url || '',
             nda_version: data.nda_version || '1.1.0',
             nda_effective_date: data.nda_effective_date || '2025-01-01',
+            show_status_page_link: data.show_status_page_link === undefined ? true : (data.show_status_page_link === true || data.show_status_page_link === 'true'),
             top_bar_links: data.top_bar_links || []
           });
           console.log('Site settings fetched.');

@@ -59,11 +59,7 @@ export default function App() {
         <Route path="/nda" element={<Nda />} />
         <Route path="/privacy" element={<PrivacyNotice />} />
         <Route path="/cookies" element={<CookieStatement />} />
-        <Route path="/documents" element={
-          <ProtectedRoute sectionId="documents">
-            <Documents />
-          </ProtectedRoute>
-        } />
+        <Route path="/documents" element={<Navigate to="/legal" replace />} />
         <Route path="/security-overview/:slug?" element={
           <ProtectedRoute sectionId="security-overview">
             <SecurityOverview />
@@ -94,11 +90,7 @@ export default function App() {
             <Legal />
           </ProtectedRoute>
         } />
-        <Route path="/dpa" element={
-          <ProtectedRoute sectionId="dpa">
-            <ModuleProducts moduleName="dpa" />
-          </ProtectedRoute>
-        } />
+        <Route path="/dpa" element={<Navigate to="/legal" replace />} />
         <Route path="/product/:slug" element={<ProductDetailWrapper />} />
         <Route path="/admin" element={
           <ProtectedRoute sectionId="admin">

@@ -19,10 +19,10 @@ export function Nda() {
 
   const defaultContent = `
     <h2>Non-Disclosure Agreement (NDA)</h2>
-    <p>This Non-Disclosure Agreement ("Agreement") governs the disclosure of confidential, proprietary, security, and compliance documentation by <strong>Björn Lunden AB</strong> and its affiliates ("Disclosing Party") to the requesting organization and its representatives ("Receiving Party").</p>
+    <p>This Non-Disclosure Agreement ("Agreement") governs the disclosure of confidential, proprietary, security, and compliance documentation by <strong>Bjorn Lunden AB</strong> and its affiliates ("Disclosing Party") to the requesting organization and its representatives ("Receiving Party").</p>
     
     <h3>1. Purpose</h3>
-    <p>The Receiving Party has requested access to confidential documentation, including but not limited to third-party audit reports (such as ISAE 3402, SOC 2, ISO 27001), penetration testing summaries, data protection impact assessments (DPIAs), architectural specifications, and internal security policies via the Björn Lunden Trust Center ("Purpose").</p>
+    <p>The Receiving Party has requested access to confidential documentation, including but not limited to third-party audit reports (such as ISAE 3402, SOC 2, ISO 27001), penetration testing summaries, data protection impact assessments (DPIAs), architectural specifications, and internal security policies via the Bjorn Lunden Trust Center ("Purpose").</p>
     
     <h3>2. Confidential Information</h3>
     <p>Confidential Information includes all non-public technical, operational, organizational, and compliance information disclosed through the Trust Center, whether in tangible, electronic, or visual form. All copies of policies, risk assessments, and audit reports are strictly Confidential Information.</p>
@@ -31,9 +31,9 @@ export function Nda() {
     <p>The Receiving Party agrees to:</p>
     <ul>
       <li>Protect and preserve the confidentiality of the Confidential Information using at least reasonable care and no less than the care used for its own confidential information.</li>
-      <li>Use Confidential Information solely for evaluating Björn Lunden's security, privacy, and compliance posture for the stated Purpose.</li>
+      <li>Use Confidential Information solely for evaluating Bjorn Lunden's security, privacy, and compliance posture for the stated Purpose.</li>
       <li>Restrict access strictly to employees, contractors, and advisors who strictly require access for the Purpose and are bound by confidentiality obligations at least as restrictive as this Agreement.</li>
-      <li>Not disclose, publish, reverse-engineer, distribute, or make available any Confidential Information to third parties without prior written consent from Björn Lunden.</li>
+      <li>Not disclose, publish, reverse-engineer, distribute, or make available any Confidential Information to third parties without prior written consent from Bjorn Lunden.</li>
     </ul>
     
     <h3>4. Watermarking & Traceability</h3>
@@ -160,7 +160,7 @@ export function Nda() {
                 Non-Disclosure Agreement (NDA)
               </h1>
               <p className="text-sm text-slate-600 mt-1 max-w-2xl">
-                Official terms and confidentiality conditions required to inspect, request, and receive restricted security documentation, policies, and audit reports from Björn Lunden.
+                Official terms and confidentiality conditions required to inspect, request, and receive restricted security documentation, policies, and audit reports from Bjorn Lunden.
               </p>
             </div>
           </div>
@@ -184,7 +184,7 @@ export function Nda() {
         <div className="mt-12 pt-6 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-xs text-slate-500">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-green-600" />
-            <span>Björn Lunden Trust Center Official Legal Publication</span>
+            <span>Bjorn Lunden Trust Center Official Legal Publication</span>
           </div>
           <div>
             Questions? Contact <a href={`mailto:${siteSettings.mailto_legal || 'security@bjornlunden.com'}`} className="text-blue-600 font-medium hover:underline">{siteSettings.mailto_legal || 'security@bjornlunden.com'}</a>

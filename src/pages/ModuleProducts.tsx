@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ExternalLink } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useCountry } from '../hooks/useCountry';
+import { fetchPublicProducts } from '../utils/api';
 
 type Product = {
   slug: string;
@@ -10,6 +11,7 @@ type Product = {
   category: string;
   color: string;
   status_url: string;
+  countries?: string[];
 };
 
 type ModuleProductsProps = {
@@ -18,15 +20,16 @@ type ModuleProductsProps = {
 
 export function ModuleProducts({ moduleName }: ModuleProductsProps) {
   const [products, setProducts] = useState<Product[]>([]);
-  const { user, publicPages } = useAuth();
+  const { user, publicPages, siteSettings } = useAuth();
   const country = useCountry();
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetch(`/api/public/products?country=${country}&t=${new Date().getTime()}`)
-      .then(res => res.json())
-      .then(data => setProducts(data))
-      .catch(err => console.error('Failed to fetch products', err));
+    fetchPublicProducts(country).then(data => {
+      if (Array.isArray(data)) {
+        setProducts(data);
+      }
+    });
   }, [country]);
 
   const filteredProducts = products.filter(product => {
@@ -70,17 +73,19 @@ export function ModuleProducts({ moduleName }: ModuleProductsProps) {
                   className="w-3 h-3 rounded-full mt-1 shrink-0" 
                   style={{ backgroundColor: product.color }}
                 />
-                <div className="flex items-center gap-2">
-                  <a 
-                    href={product.status_url} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="text-xs font-medium text-blue-600 hover:text-blue-800 flex items-center gap-1 text-right"
-                  >
-                    Status Page <ExternalLink className="w-3 h-3 shrink-0" />
-                  </a>
-                </div>
+                {siteSettings?.show_status_page_link && product.status_url && product.status_url.trim() !== '' && (
+                  <div className="flex items-center gap-2">
+                    <a 
+                      href={product.status_url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-xs font-medium text-blue-600 hover:text-blue-800 flex items-center gap-1 text-right"
+                    >
+                      Status Page <ExternalLink className="w-3 h-3 shrink-0" />
+                    </a>
+                  </div>
+                )}
               </div>
               <h4 className="font-semibold text-slate-900 pr-12">{product.name}</h4>
               <p className="text-xs text-slate-500 uppercase tracking-wider mt-1">{product.category}</p>

@@ -6,6 +6,7 @@ import { useRequestAccess } from '../contexts/RequestAccessContext';
 import { useCountry } from '../hooks/useCountry';
 import { Button } from '../components/ui/Button';
 import { getLastSelectedProduct, setLastSelectedProduct, resolveTargetProduct } from '../utils/productSelection';
+import { fetchPublicProducts, fetchJson } from '../utils/api';
 
 type Certification = {
   id: number;
@@ -53,11 +54,9 @@ export function Certifications() {
   const country = useCountry();
 
   useEffect(() => {
-    fetch('/api/public/products')
-      .then(res => res.json())
-      .then(data => {
-        setProducts(data);
-      });
+    fetchPublicProducts().then(data => {
+      if (Array.isArray(data)) setProducts(data);
+    });
   }, [user]);
 
   useEffect(() => {
@@ -68,7 +67,7 @@ export function Certifications() {
   }, [slug]);
 
   const displayProducts = products.filter(p => {
-    if (country !== 'all' && (!p.countries || !p.countries.includes(country))) {
+    if (country !== 'all' && p.countries && p.countries.length > 0 && !p.countries.includes(country)) {
       return false;
     }
     return true;
@@ -90,11 +89,13 @@ export function Certifications() {
 
   useEffect(() => {
     if (selectedProduct) {
-      fetch(`/api/public/product-certifications/${selectedProduct}`)
-        .then(res => res.json())
+      fetchJson<any>(`/api/public/product-certifications/${selectedProduct}`)
         .then(data => {
-          setCertifications(data.certifications || []);
-        });
+          if (data && Array.isArray(data.certifications)) {
+            setCertifications(data.certifications);
+          }
+        })
+        .catch(err => console.warn('Could not fetch certifications:', err));
     }
   }, [selectedProduct]);
 

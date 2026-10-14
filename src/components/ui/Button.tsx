@@ -9,6 +9,7 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
   onClick?: any;
   disabled?: boolean;
   form?: string;
+  title?: string;
 }
 
 export function Button({ 

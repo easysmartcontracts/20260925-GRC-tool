@@ -1,34 +1,62 @@
 import React, { createContext, useContext, useState } from 'react';
 import { RequestAccessModal, RequestAccessTarget } from '../components/RequestAccessModal';
+import { RequestSignedCopyModal, RequestSignedCopyTarget } from '../components/RequestSignedCopyModal';
 
 interface RequestAccessContextType {
   openRequestAccess: (target: RequestAccessTarget) => void;
   closeRequestAccess: () => void;
+  openRequestSignedCopy: (target: RequestSignedCopyTarget) => void;
+  closeRequestSignedCopy: () => void;
 }
 
 const RequestAccessContext = createContext<RequestAccessContextType | undefined>(undefined);
 
 export function RequestAccessProvider({ children }: { children: React.ReactNode }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [target, setTarget] = useState<RequestAccessTarget | null>(null);
+  const [isAccessOpen, setIsAccessOpen] = useState(false);
+  const [accessTarget, setAccessTarget] = useState<RequestAccessTarget | null>(null);
+
+  const [isSignedCopyOpen, setIsSignedCopyOpen] = useState(false);
+  const [signedCopyTarget, setSignedCopyTarget] = useState<RequestSignedCopyTarget | null>(null);
 
   const openRequestAccess = (newTarget: RequestAccessTarget) => {
-    setTarget(newTarget);
-    setIsOpen(true);
+    setAccessTarget(newTarget);
+    setIsAccessOpen(true);
   };
 
   const closeRequestAccess = () => {
-    setIsOpen(false);
-    setTarget(null);
+    setIsAccessOpen(false);
+    setAccessTarget(null);
+  };
+
+  const openRequestSignedCopy = (newTarget: RequestSignedCopyTarget) => {
+    setSignedCopyTarget(newTarget);
+    setIsSignedCopyOpen(true);
+  };
+
+  const closeRequestSignedCopy = () => {
+    setIsSignedCopyOpen(false);
+    setSignedCopyTarget(null);
   };
 
   return (
-    <RequestAccessContext.Provider value={{ openRequestAccess, closeRequestAccess }}>
+    <RequestAccessContext.Provider 
+      value={{ 
+        openRequestAccess, 
+        closeRequestAccess,
+        openRequestSignedCopy,
+        closeRequestSignedCopy
+      }}
+    >
       {children}
       <RequestAccessModal 
-        isOpen={isOpen} 
+        isOpen={isAccessOpen} 
         onClose={closeRequestAccess} 
-        target={target} 
+        target={accessTarget} 
+      />
+      <RequestSignedCopyModal 
+        isOpen={isSignedCopyOpen} 
+        onClose={closeRequestSignedCopy} 
+        target={signedCopyTarget} 
       />
     </RequestAccessContext.Provider>
   );

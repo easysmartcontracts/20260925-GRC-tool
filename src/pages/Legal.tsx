@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Scale, FileText, Mail, Globe, CheckCircle2, XCircle, Plus, Trash2, ExternalLink, Calendar, History, Edit2, X, Save, Filter, ChevronDown, ChevronUp } from 'lucide-react';
+import { Scale, FileText, Mail, Globe, CheckCircle2, XCircle, Plus, Trash2, ExternalLink, Calendar, History, Edit2, X, Save, Filter, ChevronDown, ChevronUp, FileSignature } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useRequestAccess } from '../contexts/RequestAccessContext';
 import { useCountry } from '../hooks/useCountry';
 import { Button } from '../components/ui/Button';
 import { COUNTRIES } from '../constants';
 import { getLastSelectedProduct, setLastSelectedProduct, resolveTargetProduct } from '../utils/productSelection';
+import { fetchPublicProducts, fetchJson } from '../utils/api';
 
 type LegalDocument = {
   id: number;
@@ -29,7 +30,7 @@ const DOCUMENT_TYPES = [
 
 export function Legal() {
   const { user, publicPages, refreshPublicPages, getAuthHeaders, siteSettings } = useAuth();
-  const { openRequestAccess } = useRequestAccess();
+  const { openRequestAccess, openRequestSignedCopy } = useRequestAccess();
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const [products, setProducts] = useState<any[]>([]);
@@ -72,11 +73,9 @@ export function Legal() {
   const allDocumentSections = [...DOCUMENT_TYPES, ...customTypes];
 
   useEffect(() => {
-    fetch('/api/public/products')
-      .then(res => res.json())
-      .then(data => {
-        setProducts(data);
-      });
+    fetchPublicProducts().then(data => {
+      if (Array.isArray(data)) setProducts(data);
+    });
   }, []);
 
   useEffect(() => {
@@ -87,7 +86,7 @@ export function Legal() {
   }, [slug]);
 
   const displayProducts = products.filter(p => {
-    if (country !== 'all' && (!p.countries || !p.countries.includes(country))) {
+    if (country !== 'all' && p.countries && p.countries.length > 0 && !p.countries.includes(country)) {
       return false;
     }
     return true;
@@ -104,11 +103,11 @@ export function Legal() {
 
   const fetchDocuments = () => {
     if (selectedProduct) {
-      fetch(`/api/public/product-legal/${selectedProduct}`)
-        .then(res => res.json())
+      fetchJson<LegalDocument[]>(`/api/public/product-legal/${selectedProduct}`)
         .then(data => {
-          setDocuments(data);
-        });
+          if (Array.isArray(data)) setDocuments(data);
+        })
+        .catch(err => console.warn('Could not fetch legal documents:', err));
     }
   };
 
@@ -459,18 +458,18 @@ export function Legal() {
                   type="button"
                   onClick={() => {
                     const productName = products.find(p => p.slug === selectedProduct)?.name || '';
-                    openRequestAccess({
-                      documentName: `${typeDef.title} - ${productName}`,
+                    openRequestSignedCopy({
+                      documentName: `${typeDef.title}`,
                       productName,
                       productSlug: selectedProduct || 'general',
-                      documentType: 'dpa',
+                      documentType: typeDef.id,
                       recipientEmail: siteSettings?.mailto_legal || 'security@bjornlunden.com'
                     });
                   }}
-                  className="flex items-center gap-2 px-3.5 py-2 bg-slate-900 text-white text-xs font-medium rounded-lg hover:bg-slate-800 transition-colors whitespace-nowrap"
+                  className="flex items-center gap-2 px-3.5 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors whitespace-nowrap shadow-xs cursor-pointer"
                 >
-                  <Mail className="w-3.5 h-3.5" />
-                  Request Signed Copy
+                  <FileSignature className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Request Signed Copy</span>
                 </button>
               )}
 

@@ -297,10 +297,10 @@ export function DocumentWatermarkManager() {
 
   // Generate email mailto link
   const getEmailLink = (req: DocumentRequestItem) => {
-    const subject = `[Björn Lunden Trust Center] Access Request: ${req.document_name}`;
+    const subject = `[Bjorn Lunden Trust Center] Access Request: ${req.document_name}`;
     const body = `Dear ${req.requester_name},
 
-Thank you for your document access request for the "${req.document_name}" through the Björn Lunden Trust Center.
+Thank you for your document access request for the "${req.document_name}" through the Bjorn Lunden Trust Center.
 
 In accordance with your accepted Non-Disclosure Agreement (NDA), your copy has been electronically watermarked with your authorized contact details:
 • Name: ${req.requester_name}
@@ -310,10 +310,10 @@ In accordance with your accepted Non-Disclosure Agreement (NDA), your copy has b
 
 Please find your secure watermarked PDF attached to this email. This document is strictly confidential and licensed solely for your internal evaluation under the terms of our NDA.
 
-If you have any further questions or require additional audit materials, please contact the Björn Lunden Security & Compliance Team.
+If you have any further questions or require additional audit materials, please contact the Bjorn Lunden Security & Compliance Team.
 
 Best regards,
-Björn Lunden Security & Compliance Team
+Bjorn Lunden Security & Compliance Team
 Trust Center Operations`;
 
     return `mailto:${encodeURIComponent(req.business_email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
@@ -680,7 +680,7 @@ Trust Center Operations`;
                       <span className="text-slate-400">Protected under NDA</span>
                     </div>
                     <p className="font-mono text-[9px] text-slate-400 truncate">
-                      Björn Lunden Trust Center • Distribution strictly prohibited.
+                      Bjorn Lunden Trust Center • Distribution strictly prohibited.
                     </p>
                   </div>
 

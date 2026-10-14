@@ -7,6 +7,7 @@ import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { FileText, Lock, Download, ShieldAlert, FileCheck, Plus, Pencil, Trash2, ExternalLink, X, Check, Search } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
+import { fetchPublicProducts, fetchJson } from '../utils/api';
 
 type Document = {
   id: number;
@@ -59,16 +60,18 @@ export function Documents() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   const fetchDocuments = () => {
-    fetch('/api/public/documents')
-      .then(res => res.json())
-      .then(data => setDocuments(data));
+    fetchJson<Document[]>('/api/public/documents')
+      .then(data => {
+        if (Array.isArray(data)) setDocuments(data);
+      })
+      .catch(err => console.warn('Could not fetch documents:', err));
   };
 
   useEffect(() => {
     fetchDocuments();
-    fetch('/api/public/products')
-      .then(res => res.json())
-      .then(data => setProducts(data));
+    fetchPublicProducts().then(data => {
+      if (Array.isArray(data)) setProducts(data);
+    });
   }, []);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {

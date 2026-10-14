@@ -12,7 +12,7 @@ export function CookieStatement() {
 
   const defaultContent = `
     <h2>Cookie Statement</h2>
-    <p>This Cookie Statement explains how <strong>Björn Lunden AB</strong> ("we", "us", or "our") uses cookies and similar storage technologies on our Trust Center platform.</p>
+    <p>This Cookie Statement explains how <strong>Bjorn Lunden AB</strong> ("we", "us", or "our") uses cookies and similar storage technologies on our Trust Center platform.</p>
     
     <h3>1. What Are Cookies?</h3>
     <p>Cookies are small text files stored on your computer or mobile device when you visit a website. They allow the platform to recognize your device, remember preferences, and ensure secure communication.</p>
@@ -103,7 +103,7 @@ export function CookieStatement() {
                 Cookie Statement
               </h1>
               <p className="text-sm text-slate-600 mt-1 max-w-2xl">
-                Detailed information regarding the essential security cookies and preferences utilized across the Björn Lunden Trust Center.
+                Detailed information regarding the essential security cookies and preferences utilized across the Bjorn Lunden Trust Center.
               </p>
             </div>
           </div>
@@ -127,7 +127,7 @@ export function CookieStatement() {
         <div className="mt-12 pt-6 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-xs text-slate-500">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-green-600" />
-            <span>Björn Lunden Trust Center Official Cookie Policy</span>
+            <span>Bjorn Lunden Trust Center Official Cookie Policy</span>
           </div>
           <div>
             Questions? Contact <a href={`mailto:${siteSettings.mailto_legal || 'security@bjornlunden.com'}`} className="text-blue-600 font-medium hover:underline">{siteSettings.mailto_legal || 'security@bjornlunden.com'}</a>

@@ -4,11 +4,12 @@ import { useAuth } from '../contexts/AuthContext';
 import { useRequestAccess } from '../contexts/RequestAccessContext';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { Globe, Server, Mail, Activity, Trash2, Plus, Check, AlertCircle, History, ShieldCheck, Filter, ExternalLink, Info, Pencil, FileText, Users, ArrowRightLeft, Clock, ShieldAlert, Phone, Target } from 'lucide-react';
+import { Globe, Server, Mail, Activity, Trash2, Plus, Check, AlertCircle, History, ShieldCheck, Filter, ExternalLink, Info, Pencil, FileText, Users, ArrowRightLeft, Clock, ShieldAlert, Phone, Target, Printer, X } from 'lucide-react';
 import { ConfirmationModal } from '../components/ui/ConfirmationModal';
 import { useCountry } from '../hooks/useCountry';
 import { COUNTRIES } from '../constants';
 import { getLastSelectedProduct, setLastSelectedProduct, resolveTargetProduct } from '../utils/productSelection';
+import { fetchPublicProducts, fetchJson } from '../utils/api';
 
 const categoryIcons: Record<string, React.ReactNode> = {
   'Hosting': <Server className="w-4 h-4" />,
@@ -135,11 +136,9 @@ export function Subprocessors() {
   const country = useCountry();
 
   useEffect(() => {
-    fetch('/api/public/products')
-      .then(res => res.json())
-      .then(data => {
-        setProducts(data);
-      });
+    fetchPublicProducts().then(data => {
+      if (Array.isArray(data)) setProducts(data);
+    });
   }, []);
 
   useEffect(() => {
@@ -150,7 +149,7 @@ export function Subprocessors() {
   }, [slug]);
 
   const displayProducts = products.filter(p => {
-    if (country !== 'all' && (!p.countries || !p.countries.includes(country))) {
+    if (country !== 'all' && p.countries && p.countries.length > 0 && !p.countries.includes(country)) {
       return false;
     }
     return true;
@@ -167,12 +166,14 @@ export function Subprocessors() {
 
   useEffect(() => {
     if (selectedProduct) {
-      fetch(`/api/public/product-subprocessors/${selectedProduct}`)
-        .then(res => res.json())
+      fetchJson<any>(`/api/public/product-subprocessors/${selectedProduct}`)
         .then(data => {
-          setSubprocessors(data.subprocessors);
-          setHistory(data.history);
-        });
+          if (data) {
+            setSubprocessors(data.subprocessors || []);
+            setHistory(data.history || []);
+          }
+        })
+        .catch(err => console.warn('Could not fetch subprocessors:', err));
     }
   }, [selectedProduct]);
 
@@ -411,7 +412,7 @@ export function Subprocessors() {
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 relative">
       {toast && (
-        <div className={`fixed top-4 right-4 px-4 py-3 rounded z-[100] flex items-center gap-2 shadow-md border animate-in slide-in-from-top-2 duration-300 ${
+        <div className={`fixed top-4 right-4 px-4 py-3 rounded z-[100] flex items-center gap-2 shadow-md border animate-in slide-in-from-top-2 duration-300 print:hidden ${
           toast.type === 'success' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'
         }`}>
           {toast.type === 'success' ? <Check className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
@@ -429,28 +430,30 @@ export function Subprocessors() {
         variant="danger"
       />
 
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 print:hidden">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Authorized Subprocessors</h1>
           <p className="text-slate-500 mt-2 max-w-2xl">Third-party services we use to deliver Bjorn Lunden products securely and reliably.</p>
         </div>
         
-        {canEdit && (
-          <Button 
-            variant={isPublic ? "outline" : "primary"}
-            onClick={togglePublic}
-            className="flex items-center gap-2"
-          >
-            <Globe className="w-4 h-4" />
-            {isPublic ? "Make Private" : "Make Public"}
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {canEdit && (
+            <Button 
+              variant={isPublic ? "outline" : "primary"}
+              onClick={togglePublic}
+              className="flex items-center gap-2"
+            >
+              <Globe className="w-4 h-4" />
+              {isPublic ? "Make Private" : "Make Public"}
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Main Layout */}
       <div className="flex flex-col lg:flex-row gap-5 items-start w-full">
         {/* Left Sidebar (Products) */}
-        <div className="w-full lg:w-52 xl:w-56 shrink-0 sticky top-6">
+        <div className="w-full lg:w-52 xl:w-56 shrink-0 sticky top-6 print:hidden">
           <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm overflow-y-auto max-h-[calc(100vh-6rem)]">
             <h3 className="font-semibold text-slate-900 mb-3 px-2 text-sm">Select Product</h3>
             <div className="flex flex-col gap-1">
@@ -479,9 +482,38 @@ export function Subprocessors() {
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 min-w-0 space-y-6">
+        <div className="flex-1 min-w-0 space-y-6 print:w-full print:space-y-4">
+          {/* Print-Only Header (visible exclusively in print / PDF output) */}
+          <div className="hidden print:block mb-6 pb-4 border-b-2 border-slate-900">
+            <div className="flex justify-between items-start">
+              <div>
+                <div className="text-[10px] uppercase font-bold text-blue-600 tracking-wider">
+                  {siteSettings?.site_name || 'Bjorn Lunden'} • Trust Center Public Documentation
+                </div>
+                <h1 className="text-2xl font-bold text-slate-900 mt-1">
+                  Authorized Subprocessors &amp; Registry of Alterations
+                </h1>
+                <div className="text-sm font-bold text-slate-800 mt-1">
+                  Product: {displayProducts.find(p => p.slug === selectedProduct)?.name || selectedProduct}
+                </div>
+                <div className="text-xs text-slate-500 mt-0.5">
+                  {country === 'all' ? 'Jurisdiction Scope: Global (All Scope)' : `Jurisdiction Scope: ${country.toUpperCase()}`}
+                </div>
+              </div>
+              <div className="text-right text-xs text-slate-600">
+                <div className="font-medium text-slate-700">Date printed: {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+                <div className="text-slate-500 mt-0.5">Ref: SUB-{(selectedProduct || '').toUpperCase()}</div>
+              </div>
+            </div>
+
+            <div className="mt-3 flex items-center justify-between text-[10px] text-slate-600 font-medium pt-2 border-t border-slate-100">
+              <span>Total Active Subprocessors: <strong>{subprocessors.filter(sub => country === 'all' || (sub.countries && sub.countries.includes(country))).length}</strong></span>
+              <span>Total Alteration Versions: <strong>{history.length}</strong></span>
+            </div>
+          </div>
+
           {/* View Switcher: Alternate between Current Subprocessors and Registry of Alterations */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm print:hidden">
             <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100/90 rounded-xl border border-slate-200/80">
               <button
                 type="button"
@@ -534,14 +566,21 @@ export function Subprocessors() {
 
             {/* Contextual Action Button */}
             <div className="flex items-center gap-2">
-              {(viewMode === 'subprocessors' || viewMode === 'all') && canEdit && (
+              {viewMode === 'all' && (
+                <a
+                  href={`/api/public/subprocessors-pdf/${selectedProduct}${country !== 'all' ? `?country=${country}` : ''}`}
+                  download={`${selectedProduct}-authorized-subprocessors.pdf`}
+                  className="flex items-center gap-2 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs sm:text-sm font-semibold transition-all shadow-sm w-fit group cursor-pointer"
+                  title="Print / Save PDF"
+                >
+                  <Printer className="w-4 h-4 text-slate-300 group-hover:text-white transition-colors" />
+                  <span>Print / Save PDF</span>
+                </a>
+              )}
+
+              {viewMode === 'subprocessors' && canEdit && (
                 <Button size="sm" onClick={() => setIsAddingSub(true)} className="flex items-center gap-1.5 whitespace-nowrap shadow-sm">
                   <Plus className="w-4 h-4" /> Add Subprocessor
-                </Button>
-              )}
-              {viewMode === 'alterations' && canEdit && (
-                <Button size="sm" variant="outline" onClick={() => setIsAddingHistory(true)} className="flex items-center gap-1.5 whitespace-nowrap shadow-sm">
-                  <Plus className="w-4 h-4" /> Add Version
                 </Button>
               )}
             </div>
@@ -549,8 +588,8 @@ export function Subprocessors() {
 
           {/* Current Subprocessors Overview Table - Optimized to fit full view without sliding */}
           {(viewMode === 'subprocessors' || viewMode === 'all') && (
-            <Card className="overflow-hidden">
-              <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 py-3.5 px-5 border-b border-slate-100">
+            <Card className="overflow-hidden print:overflow-visible print:shadow-none print:border print:border-slate-300 print:break-inside-avoid print:mb-8">
+              <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 py-3.5 px-5 border-b border-slate-100 print:bg-slate-50 print:border-slate-300">
                 <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
                   <ShieldCheck className="w-5 h-5 text-blue-600" />
                   Current Subprocessors
@@ -562,23 +601,23 @@ export function Subprocessors() {
                     </span>
                   )}
                   {viewMode === 'all' && canEdit && (
-                    <Button size="sm" onClick={() => setIsAddingSub(true)} className="flex items-center gap-1 whitespace-nowrap">
+                    <Button size="sm" onClick={() => setIsAddingSub(true)} className="flex items-center gap-1 whitespace-nowrap print:hidden">
                       <Plus className="w-4 h-4" /> Add Subprocessor
                     </Button>
                   )}
                 </div>
               </CardHeader>
-              <CardContent className="p-0">
-                <table className="w-full text-left border-collapse table-fixed">
+              <CardContent className="p-0 print:overflow-visible">
+                <table className="w-full text-left border-collapse table-fixed print:table-auto print:text-xs">
                   <thead>
-                    <tr className="bg-slate-50/80 border-b border-slate-200 text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                    <tr className="bg-slate-50/80 border-b border-slate-200 text-xs font-semibold text-slate-600 uppercase tracking-wider print:bg-slate-100 print:text-slate-800">
                       <th className={`px-3 py-3 ${canEdit ? 'w-[20%]' : 'w-[22%]'}`}>Identity</th>
                       <th className={`px-2.5 py-3 ${canEdit ? 'w-[10%]' : 'w-[12%]'}`}>Location</th>
                       <th className={`px-2.5 py-3 ${canEdit ? 'w-[19%]' : 'w-[20%]'}`}>Nature of Processing</th>
                       <th className={`px-2.5 py-3 ${canEdit ? 'w-[16%]' : 'w-[17%]'}`}>Categories of Data</th>
                       <th className={`px-2.5 py-3 ${canEdit ? 'w-[17%]' : 'w-[18%]'}`}>Purpose</th>
                       <th className={`px-2.5 py-3 ${canEdit ? 'w-[11%]' : 'w-[11%]'}`}>Certifications</th>
-                      {canEdit && <th className="px-2 py-3 w-[7%] text-right">Actions</th>}
+                      {canEdit && <th className="px-2 py-3 w-[7%] text-right print:hidden">Actions</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -617,7 +656,7 @@ export function Subprocessors() {
                               )}
                             </div>
                             
-                            <div className="shrink-0 pt-0.5">
+                            <div className="shrink-0 pt-0.5 print:hidden">
                               <button 
                                 type="button" 
                                 onClick={() => setInspectingSub(sub)}
@@ -681,7 +720,7 @@ export function Subprocessors() {
                         </td>
 
                         {canEdit && (
-                          <td className="px-2 py-3 text-right align-top">
+                          <td className="px-2 py-3 text-right align-top print:hidden">
                             <div className="flex items-center justify-end gap-1">
                               <button 
                                 type="button" 
@@ -719,42 +758,42 @@ export function Subprocessors() {
 
           {/* History Registry */}
           {(viewMode === 'alterations' || viewMode === 'all') && (
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between py-4 px-6 border-b border-slate-100">
+            <Card className="overflow-hidden print:overflow-visible print:shadow-none print:border print:border-slate-300 print:break-inside-avoid print:mb-8">
+              <CardHeader className="flex flex-row items-center justify-between py-4 px-6 border-b border-slate-100 print:bg-slate-50 print:border-slate-300 print:py-2.5 print:px-4">
                 <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
                   <History className="w-5 h-5 text-blue-600" />
                   Registry of Alterations
                 </CardTitle>
                 {canEdit && (
-                  <Button size="sm" variant="outline" onClick={() => setIsAddingHistory(true)} className="flex items-center gap-1">
+                  <Button size="sm" variant="outline" onClick={() => setIsAddingHistory(true)} className="flex items-center gap-1 print:hidden">
                     <Plus className="w-4 h-4" /> Add Version
                   </Button>
                 )}
               </CardHeader>
-              <CardContent className="p-0 overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50/80 border-b border-slate-200 text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                      <th className="px-4 py-3.5 w-24">Version</th>
-                      <th className="px-4 py-3.5 w-32">Date</th>
-                      <th className="px-4 py-3.5">Description</th>
-                      {canEdit && <th className="px-4 py-3.5 w-16 text-right">Actions</th>}
+              <CardContent className="p-0 overflow-x-auto print:overflow-visible">
+                <table className="w-full text-left border-collapse print:table-auto print:text-xs">
+                  <thead className="print:table-header-group">
+                    <tr className="bg-slate-50/80 border-b border-slate-200 text-xs font-semibold text-slate-600 uppercase tracking-wider print:bg-slate-100 print:text-slate-800">
+                      <th className="px-4 py-3.5 w-24 print:border print:border-slate-300 print:py-2 print:px-3">Version</th>
+                      <th className="px-4 py-3.5 w-32 print:border print:border-slate-300 print:py-2 print:px-3">Date</th>
+                      <th className="px-4 py-3.5 print:border print:border-slate-300 print:py-2 print:px-3">Description</th>
+                      {canEdit && <th className="px-4 py-3.5 w-16 text-right print:hidden">Actions</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {history.map((entry) => (
-                      <tr key={entry.id} className="hover:bg-slate-50/60 transition-colors">
-                        <td className="px-4 py-3.5 whitespace-nowrap font-mono text-sm font-semibold text-slate-900">
+                      <tr key={entry.id} className="hover:bg-slate-50/60 transition-colors print:break-inside-avoid print:page-break-inside-avoid">
+                        <td className="px-4 py-3.5 whitespace-nowrap font-mono text-sm font-semibold text-slate-900 print:border print:border-slate-300 print:py-2 print:px-3">
                           v{entry.version}
                         </td>
-                        <td className="px-4 py-3.5 whitespace-nowrap text-sm text-slate-600">
+                        <td className="px-4 py-3.5 whitespace-nowrap text-sm text-slate-600 print:border print:border-slate-300 print:py-2 print:px-3">
                           {entry.date}
                         </td>
-                        <td className="px-4 py-3.5 text-sm text-slate-600 leading-relaxed">
+                        <td className="px-4 py-3.5 text-sm text-slate-600 leading-relaxed print:border print:border-slate-300 print:py-2 print:px-3">
                           {entry.description}
                         </td>
                         {canEdit && (
-                          <td className="px-4 py-3.5 text-right">
+                          <td className="px-4 py-3.5 text-right print:hidden">
                             <button 
                               onClick={() => setDeleteConfirm({ id: entry.id, type: 'history' })}
                               className="text-slate-400 hover:text-red-600 transition-colors p-1 rounded hover:bg-slate-100"
@@ -768,7 +807,7 @@ export function Subprocessors() {
                     ))}
                     {history.length === 0 && (
                       <tr>
-                        <td colSpan={canEdit ? 4 : 3} className="px-6 py-8 text-center text-slate-500 italic">
+                        <td colSpan={canEdit ? 4 : 3} className="px-6 py-8 text-center text-slate-500 italic print:border print:border-slate-300">
                           No history entries recorded.
                         </td>
                       </tr>
@@ -779,9 +818,16 @@ export function Subprocessors() {
             </Card>
           )}
 
+          {/* Print-Only Footer at bottom of document */}
+          <div className="hidden print:flex justify-between items-center pt-3 border-t-2 border-slate-900 text-[9px] text-slate-500 mt-6">
+            <div>© {new Date().getFullYear()} {siteSettings?.site_name || 'Bjorn Lunden'} • Trust Center Public Documentation</div>
+            <div>Product: {displayProducts.find(p => p.slug === selectedProduct)?.name || selectedProduct} • Reference: SUB-{(selectedProduct || '').toUpperCase()}</div>
+            <div className="font-semibold text-slate-700">Public Version</div>
+          </div>
+
       {/* Modals for Adding */}
       {isAddingSub && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 print:hidden">
           <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] flex flex-col">
             <div className="p-6 border-b border-slate-100 shrink-0">
               <h3 className="text-xl font-bold">Add Subprocessor</h3>
@@ -1032,7 +1078,7 @@ export function Subprocessors() {
       )}
 
       {editingSub && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 print:hidden">
           <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] flex flex-col">
             <div className="p-6 border-b border-slate-100 shrink-0">
               <h3 className="text-xl font-bold">Edit Subprocessor</h3>
@@ -1283,7 +1329,7 @@ export function Subprocessors() {
       )}
 
       {inspectingSub && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 print:hidden">
           <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col transition-all border border-slate-100">
             <div className="p-6 border-b border-slate-100 bg-slate-50/50 rounded-t-xl flex items-start justify-between">
               <div>
@@ -1505,7 +1551,7 @@ export function Subprocessors() {
       )}
 
       {isAddingHistory && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 print:hidden">
           <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
             <h3 className="text-xl font-bold mb-4">Add Version Entry</h3>
             <div className="space-y-4">

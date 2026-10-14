@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ChevronRight, Home } from 'lucide-react';
+import { fetchPublicProducts } from '../../utils/api';
 
 interface BreadcrumbItem {
   label: string;
@@ -21,16 +22,11 @@ export function Breadcrumbs() {
 
   useEffect(() => {
     let isMounted = true;
-    fetch('/api/public/products')
-      .then(res => res.json())
-      .then(data => {
-        if (isMounted && Array.isArray(data)) {
-          setProducts(data);
-        }
-      })
-      .catch(err => {
-        console.error('Failed to load products for breadcrumbs:', err);
-      });
+    fetchPublicProducts().then(data => {
+      if (isMounted && Array.isArray(data)) {
+        setProducts(data);
+      }
+    });
 
     return () => {
       isMounted = false;

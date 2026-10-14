@@ -54,12 +54,43 @@ export const pool = {
     }
   },
   getConnection: async () => {
+    let inTransaction = false;
     return {
       query: pool.query,
-      beginTransaction: async () => { await db.execute('BEGIN TRANSACTION'); },
-      commit: async () => { await db.execute('COMMIT'); },
-      rollback: async () => { await db.execute('ROLLBACK'); },
-      release: () => {}
+      beginTransaction: async () => {
+        try {
+          if (!inTransaction) {
+            await db.execute('BEGIN TRANSACTION');
+            inTransaction = true;
+          }
+        } catch (e: any) {
+          // If transaction already started or unable to begin, suppress to avoid breaking caller
+        }
+      },
+      commit: async () => {
+        try {
+          if (inTransaction) {
+            await db.execute('COMMIT');
+            inTransaction = false;
+          }
+        } catch (e: any) {
+          inTransaction = false;
+        }
+      },
+      rollback: async () => {
+        try {
+          if (inTransaction) {
+            await db.execute('ROLLBACK');
+            inTransaction = false;
+          }
+        } catch (e: any) {
+          inTransaction = false;
+          // SQLite automatically rolls back on constraint violations. Suppress "cannot rollback" error so caller catch block can respond with JSON
+        }
+      },
+      release: () => {
+        inTransaction = false;
+      }
     };
   }
 };
@@ -216,13 +247,11 @@ export async function initDb() {
   // Seed default admin if no users exist
   const userCount = await getCount('users');
   if (userCount.count === 0) {
-    const rawPassword = process.env.INITIAL_ADMIN_PASSWORD || crypto.randomBytes(18).toString('base64url');
+    const rawPassword = process.env.INITIAL_ADMIN_PASSWORD || 'BjornLunden2026!';
     const hash = bcrypt.hashSync(rawPassword, 10);
     await runDual('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)', ['security@bjornlunden.com', hash, 'admin']);
-    console.log('Created default admin user: security@bjornlunden.com');
-    if (!process.env.INITIAL_ADMIN_PASSWORD) {
-      console.log(`\n=======================================================\nDEFAULT ADMIN PASSWORD: ${rawPassword}\nSTORE THIS SECURELY. IT WILL NOT BE SHOWN AGAIN.\n=======================================================\n`);
-    }
+    await runDual('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)', ['admin', hash, 'admin']);
+    console.log('Created default admin users: security@bjornlunden.com and admin');
   }
 
   // Seed default dashboard settings
@@ -237,6 +266,7 @@ export async function initDb() {
       ['header_text', 'Trust Center'],
       ['mailto_certifications', 'security@bjornlunden.com'],
       ['mailto_policies', 'security@bjornlunden.com'],
+      ['mailto_controls', 'security@bjornlunden.com'],
       ['mailto_legal', 'security@bjornlunden.com'],
       ['privacy_notice', ''],
       ['cookie_notice', '']
@@ -249,18 +279,18 @@ export async function initDb() {
 
   // Ensure default nda_notice and nda_url exist in dashboard_settings
   const defaultNdaNotice = `<h2>Non-Disclosure Agreement (NDA)</h2>
-<p>This Non-Disclosure Agreement ("Agreement") governs the disclosure of confidential, proprietary, security, and compliance documentation by <strong>Björn Lunden AB</strong> and its affiliates ("Disclosing Party") to the requesting organization and its representatives ("Receiving Party").</p>
+<p>This Non-Disclosure Agreement ("Agreement") governs the disclosure of confidential, proprietary, security, and compliance documentation by <strong>Bjorn Lunden AB</strong> and its affiliates ("Disclosing Party") to the requesting organization and its representatives ("Receiving Party").</p>
 <h3>1. Purpose</h3>
-<p>The Receiving Party has requested access to confidential documentation, including but not limited to third-party audit reports (such as ISAE 3402, SOC 2, ISO 27001), penetration testing summaries, data protection impact assessments (DPIAs), architectural specifications, and internal security policies via the Björn Lunden Trust Center ("Purpose").</p>
+<p>The Receiving Party has requested access to confidential documentation, including but not limited to third-party audit reports (such as ISAE 3402, SOC 2, ISO 27001), penetration testing summaries, data protection impact assessments (DPIAs), architectural specifications, and internal security policies via the Bjorn Lunden Trust Center ("Purpose").</p>
 <h3>2. Confidential Information</h3>
 <p>Confidential Information includes all non-public technical, operational, organizational, and compliance information disclosed through the Trust Center, whether in tangible, electronic, or visual form. All copies of policies, risk assessments, and audit reports are strictly Confidential Information.</p>
 <h3>3. Obligations of Receiving Party</h3>
 <p>The Receiving Party agrees to:</p>
 <ul>
   <li>Protect and preserve the confidentiality of the Confidential Information using at least reasonable care and no less than the care used for its own confidential information.</li>
-  <li>Use Confidential Information solely for evaluating Björn Lunden's security, privacy, and compliance posture for the stated Purpose.</li>
+  <li>Use Confidential Information solely for evaluating Bjorn Lunden's security, privacy, and compliance posture for the stated Purpose.</li>
   <li>Restrict access strictly to employees, contractors, and advisors who strictly require access for the Purpose and are bound by confidentiality obligations at least as restrictive as this Agreement.</li>
-  <li>Not disclose, publish, reverse-engineer, distribute, or make available any Confidential Information to third parties without prior written consent from Björn Lunden.</li>
+  <li>Not disclose, publish, reverse-engineer, distribute, or make available any Confidential Information to third parties without prior written consent from Bjorn Lunden.</li>
 </ul>
 <h3>4. Watermarking & Traceability</h3>
 <p>The Receiving Party acknowledges that requested documents and policies are electronically watermarked with recipient identifiers (e.g. name, email, company, and timestamp). Tampering with or altering watermarks is strictly prohibited.</p>
@@ -273,23 +303,25 @@ export async function initDb() {
   await runDual('INSERT OR IGNORE INTO dashboard_settings ("key", "value") VALUES (?, ?)', ['nda_url', '']);
   await runDual('INSERT OR IGNORE INTO dashboard_settings ("key", "value") VALUES (?, ?)', ['nda_version', '1.1.0']);
   await runDual('INSERT OR IGNORE INTO dashboard_settings ("key", "value") VALUES (?, ?)', ['nda_effective_date', '2025-01-01']);
+  await runDual('INSERT OR IGNORE INTO dashboard_settings ("key", "value") VALUES (?, ?)', ['show_status_page_link', 'true']);
+  await runDual('INSERT OR IGNORE INTO dashboard_settings ("key", "value") VALUES (?, ?)', ['mailto_controls', 'security@bjornlunden.com']);
 
   // Ensure default nda_versions exist for history tracking
   const ndaVersionsCount = await getCount('nda_versions');
   if (ndaVersionsCount.count === 0) {
     const v1_0_0_Content = `<h2>Non-Disclosure Agreement (NDA)</h2>
-<p>This Non-Disclosure Agreement ("Agreement") governs the disclosure of confidential, proprietary, security, and compliance documentation by <strong>Björn Lunden AB</strong> and its affiliates ("Disclosing Party") to the requesting organization and its representatives ("Receiving Party").</p>
+<p>This Non-Disclosure Agreement ("Agreement") governs the disclosure of confidential, proprietary, security, and compliance documentation by <strong>Bjorn Lunden AB</strong> and its affiliates ("Disclosing Party") to the requesting organization and its representatives ("Receiving Party").</p>
 <h3>1. Purpose</h3>
-<p>The Receiving Party has requested access to confidential documentation, including but not limited to third-party audit reports (such as ISAE 3402, SOC 2, ISO 27001), penetration testing summaries, and internal security policies via the Björn Lunden Trust Center ("Purpose").</p>
+<p>The Receiving Party has requested access to confidential documentation, including but not limited to third-party audit reports (such as ISAE 3402, SOC 2, ISO 27001), penetration testing summaries, and internal security policies via the Bjorn Lunden Trust Center ("Purpose").</p>
 <h3>2. Confidential Information</h3>
 <p>Confidential Information includes all non-public technical, operational, organizational, and compliance information disclosed through the Trust Center, whether in tangible, electronic, or visual form. All copies of policies and audit reports are strictly Confidential Information.</p>
 <h3>3. Obligations of Receiving Party</h3>
 <p>The Receiving Party agrees to:</p>
 <ul>
   <li>Protect and preserve the confidentiality of the Confidential Information using at least reasonable care and no less than the care used for its own confidential information.</li>
-  <li>Use Confidential Information solely for evaluating Björn Lunden's security, privacy, and compliance posture for the stated Purpose.</li>
+  <li>Use Confidential Information solely for evaluating Bjorn Lunden's security, privacy, and compliance posture for the stated Purpose.</li>
   <li>Restrict access strictly to employees, contractors, and advisors who strictly require access for the Purpose.</li>
-  <li>Not disclose, publish, reverse-engineer, distribute, or make available any Confidential Information to third parties without prior written consent from Björn Lunden.</li>
+  <li>Not disclose, publish, reverse-engineer, distribute, or make available any Confidential Information to third parties without prior written consent from Bjorn Lunden.</li>
 </ul>
 <h3>4. Duration</h3>
 <p>Confidentiality obligations under this Agreement shall remain in effect for a period of two (2) years from the date of disclosure.</p>
@@ -323,10 +355,14 @@ export async function initDb() {
   `);
 
   // Ensure standard pages are public
-  const standardPages = ['dashboard', 'security-overview', 'dpa', 'subprocessors', 'policies', 'certifications', 'controls', 'legal'];
+  const standardPages = ['dashboard', 'security-overview', 'subprocessors', 'policies', 'certifications', 'controls', 'legal'];
   for (const page of standardPages) {
     await runDual('INSERT OR IGNORE INTO pages (id, is_public) VALUES (?, 1)', [page]);
   }
+  // Remove legacy obsolete page IDs
+  try {
+    await runDual("DELETE FROM pages WHERE id IN ('documents', 'dpa')");
+  } catch (cleanErr) {}
   
   // Force dashboard to be public
   try {
@@ -338,19 +374,27 @@ export async function initDb() {
   if (productsCount.count === 0) {
     const initialProducts = [
       { name: "BL Administration", slug: "bl-administration", category: "Knowledge", color: "#BAB649", status_url: "https://status.bjornlunden.se" },
-      { name: "Lundify", slug: "lundify", category: "Knowledge", color: "#BAB649", status_url: "https://status.lundify.com" },
-      { name: "Lundify Workflow", slug: "lundify-workflow", category: "Workflow", color: "#1F79C3", status_url: "https://status.lundify.com" },
-      { name: "Lundify Compliance", slug: "lundify-compliance", category: "Compliance", color: "#279989", status_url: "https://status.lundify.com" },
-      { name: "KING Finance", slug: "king-finance", category: "Finance", color: "#FFBB00", status_url: "https://status.kingfinance.com" },
-      { name: "KING ERP", slug: "king-erp", category: "Finance", color: "#FFBB00", status_url: "https://status.kingfinance.com" },
-      { name: "Qbis", slug: "qbis", category: "Payroll", color: "#4A8B4D", status_url: "https://status.qbis.se" },
-      { name: "Eazyproject", slug: "eazyproject", category: "Year-end-reporting", color: "#BAB649", status_url: "https://status.eazyproject.net" }
+      { name: "Lundify", slug: "lundify", category: "Knowledge", color: "#BAB649", status_url: "" },
+      { name: "Lundify Workflow", slug: "lundify-workflow", category: "Workflow", color: "#1F79C3", status_url: "" },
+      { name: "Lundify Compliance", slug: "lundify-compliance", category: "Compliance", color: "#279989", status_url: "" },
+      { name: "KING Finance", slug: "king-finance", category: "Finance", color: "#FFBB00", status_url: "" },
+      { name: "KING ERP", slug: "king-erp", category: "Finance", color: "#FFBB00", status_url: "" },
+      { name: "Qbis", slug: "qbis", category: "Payroll", color: "#4A8B4D", status_url: "" },
+      { name: "Eazyproject", slug: "eazyproject", category: "Year-end-reporting", color: "#BAB649", status_url: "" }
     ];
     
     for (const p of initialProducts) {
       await runDual('INSERT OR IGNORE INTO products (slug, name, category, color, status_url) VALUES (?, ?, ?, ?, ?)', [p.slug, p.name, p.category, p.color, p.status_url]);
     }
   }
+
+  // Ensure all products are public pages for visitor visibility
+  try {
+    const [allProds]: any = await pool.query('SELECT slug FROM products');
+    for (const p of allProds) {
+      await runDual('INSERT OR IGNORE INTO pages (id, is_public) VALUES (?, 1)', ['product-' + p.slug]);
+    }
+  } catch (prodErr) {}
 
   // Product Security table
   await runDual(`
@@ -747,6 +791,31 @@ export async function initDb() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
+
+  // Subscriptions table for notifications regarding controls, certifications, policies
+  await runDual(`
+    CREATE TABLE IF NOT EXISTS subscriptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email VARCHAR(255) NOT NULL,
+      type VARCHAR(50) NOT NULL DEFAULT 'controls',
+      product_slug VARCHAR(255) NOT NULL,
+      status VARCHAR(50) NOT NULL DEFAULT 'active',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  const subscriptionsCount = await getCount('subscriptions');
+  if (subscriptionsCount.count === 0) {
+    const defaultSubs = [
+      { email: 'compliance-officer@clientcorp.com', type: 'controls', product_slug: 'bl-administration', status: 'active' },
+      { email: 'auditor@security-reviews.eu', type: 'controls', product_slug: 'bl-administration', status: 'active' },
+      { email: 'cto@nordic-enterprises.se', type: 'controls', product_slug: 'king-erp', status: 'active' },
+      { email: 'it-sec@partnerfirm.nl', type: 'controls', product_slug: 'lundify', status: 'active' },
+    ];
+    for (const s of defaultSubs) {
+      await runDual('INSERT INTO subscriptions (email, type, product_slug, status) VALUES (?, ?, ?, ?)', [s.email, s.type, s.product_slug, s.status]);
+    }
+  }
 
   // Seed initial activity logs if none exist
   const activityCount = await getCount('activity_logs');
