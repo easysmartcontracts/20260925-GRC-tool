@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import { Layout } from './components/layout/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { Documents } from './pages/Documents';
@@ -9,9 +9,7 @@ import { AdminDashboard } from './pages/AdminDashboard';
 import { ModuleProducts } from './pages/ModuleProducts';
 import { SecurityOverview } from './pages/SecurityOverview';
 import { Certifications } from './pages/Certifications';
-import { Policies } from './pages/Policies';
 import { Legal } from './pages/Legal';
-import { Controls } from './pages/Controls';
 import { Subprocessors } from './pages/Subprocessors';
 import { AdminKPI } from './pages/AdminKPI';
 import { Nda } from './pages/Nda';
@@ -41,7 +39,13 @@ export default function App() {
     if (path.startsWith('/product/')) {
       return `product-${path.split('/')[2]}`;
     }
-    // Handle paths like /policies/lundify -> policies
+    if (path.startsWith('/legal')) {
+      return 'legal';
+    }
+    if (path.startsWith('/security-features')) {
+      return 'security-overview';
+    }
+    // Handle paths like /certifications/lundify -> certifications
     return path.split('/')[1];
   };
 
@@ -60,31 +64,30 @@ export default function App() {
         <Route path="/privacy" element={<PrivacyNotice />} />
         <Route path="/cookies" element={<CookieStatement />} />
         <Route path="/documents" element={<Navigate to="/legal" replace />} />
+        <Route path="/security-features/:slug?" element={
+          <ProtectedRoute sectionId="security-overview">
+            <SecurityOverview />
+          </ProtectedRoute>
+        } />
         <Route path="/security-overview/:slug?" element={
           <ProtectedRoute sectionId="security-overview">
             <SecurityOverview />
           </ProtectedRoute>
         } />
-        <Route path="/controls/:slug?" element={
-          <ProtectedRoute sectionId="controls">
-            <Controls />
-          </ProtectedRoute>
-        } />
+        <Route path="/controls/:slug?" element={<Navigate to="/security-features" replace />} />
         <Route path="/certifications/:slug?" element={
           <ProtectedRoute sectionId="certifications">
             <Certifications />
           </ProtectedRoute>
         } />
+        <Route path="/compliance/:slug?" element={<Navigate to="/certifications" replace />} />
         <Route path="/subprocessors/:slug?" element={
           <ProtectedRoute sectionId="subprocessors">
             <Subprocessors />
           </ProtectedRoute>
         } />
-        <Route path="/policies/:slug?" element={
-          <ProtectedRoute sectionId="policies">
-            <Policies />
-          </ProtectedRoute>
-        } />
+        <Route path="/policies/:slug" element={<PolicyRedirect />} />
+        <Route path="/policies" element={<Navigate to="/legal?tab=policies" replace />} />
         <Route path="/legal/:slug?" element={
           <ProtectedRoute sectionId="legal">
             <Legal />
@@ -106,6 +109,11 @@ export default function App() {
       </Routes>
     </Layout>
   );
+}
+
+function PolicyRedirect() {
+  const { slug } = useParams<{ slug: string }>();
+  return <Navigate to={slug ? `/legal/${slug}?tab=policies` : '/legal?tab=policies'} replace />;
 }
 
 function ProductDetailWrapper() {

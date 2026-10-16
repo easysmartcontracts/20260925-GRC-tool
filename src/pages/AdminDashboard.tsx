@@ -38,7 +38,8 @@ import {
   ChevronDown, 
   ShieldCheck,
   SlidersHorizontal,
-  Bell
+  Bell,
+  Briefcase
 } from 'lucide-react';
 import { ControlSubscriptionsManager } from '../components/subscriptions/ControlSubscriptionsManager';
 import { COUNTRIES } from '../constants';
@@ -136,6 +137,10 @@ export function AdminDashboard() {
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newRole, setNewRole] = useState('viewer');
+  const [newJobRole, setNewJobRole] = useState('');
+  const [editingUserId, setEditingUserId] = useState<number | null>(null);
+  const [editJobRole, setEditJobRole] = useState('');
+  const [editRole, setEditRole] = useState('viewer');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
   const [showAddUser, setShowAddUser] = useState(false);
@@ -361,8 +366,7 @@ export function AdminDashboard() {
 
   const allModules = [
     { id: 'dashboard', label: 'Dashboard' },
-    { id: 'security-overview', label: 'Security Overview' },
-    { id: 'controls', label: 'Controls' },
+    { id: 'security-overview', label: 'Security features' },
     { id: 'certifications', label: 'Certifications and Reports' },
     { id: 'policies', label: 'Policies' },
     { id: 'legal', label: 'Legal Documents' },
@@ -574,17 +578,51 @@ export function AdminDashboard() {
           ...getAuthHeaders()
         },
         credentials: 'include',
-        body: JSON.stringify({ username: newUsername, password: newPassword, role: newRole })
+        body: JSON.stringify({ 
+          username: newUsername, 
+          password: newPassword, 
+          role: newRole,
+          job_role: newJobRole
+        })
       });
       if (res.ok) {
         setNewUsername('');
         setNewPassword('');
+        setNewJobRole('');
+        setShowAddUser(false);
         fetchUsers();
         setToast({ message: 'User created successfully!', type: 'success' });
         setTimeout(() => setToast(null), 3000);
       } else {
         const data = await res.json();
         setToast({ message: data.error || 'Failed to create user', type: 'error' });
+        setTimeout(() => setToast(null), 3000);
+      }
+    } catch (err) {
+      console.error(err);
+      setToast({ message: 'Network error occurred', type: 'error' });
+      setTimeout(() => setToast(null), 3000);
+    }
+  };
+
+  const handleUpdateUser = async (id: number, updates: { role?: string; job_role?: string }) => {
+    try {
+      const res = await fetch(`/api/admin/users/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
+        credentials: 'include',
+        body: JSON.stringify(updates)
+      });
+      if (res.ok) {
+        fetchUsers();
+        setToast({ message: 'Account updated successfully!', type: 'success' });
+        setTimeout(() => setToast(null), 3000);
+      } else {
+        const data = await res.json();
+        setToast({ message: data.error || 'Failed to update user', type: 'error' });
         setTimeout(() => setToast(null), 3000);
       }
     } catch (err) {
@@ -1559,7 +1597,7 @@ export function AdminDashboard() {
           }`}
         >
           <Bell className="w-3.5 h-3.5" />
-          Control Subscriptions
+          Notification Subscriptions
         </button>
       </div>
 
@@ -1668,10 +1706,10 @@ export function AdminDashboard() {
                   <span className="text-xs text-slate-500">All fields required</span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Username *
+                      Username / Email *
                     </label>
                     <input
                       type="text"
@@ -1679,6 +1717,19 @@ export function AdminDashboard() {
                       value={newUsername}
                       onChange={(e) => setNewUsername(e.target.value)}
                       placeholder="e.g. jdoe@company.com"
+                      className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Job Role / Title
+                    </label>
+                    <input
+                      type="text"
+                      value={newJobRole}
+                      onChange={(e) => setNewJobRole(e.target.value)}
+                      placeholder="e.g. Information Security Officer"
                       className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
                     />
                   </div>
@@ -1693,6 +1744,11 @@ export function AdminDashboard() {
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="Min 12 chars, Aa1!"
+                      autoComplete="new-password"
+                      autoCorrect="off"
+                      autoCapitalize="none"
+                      spellCheck={false}
+                      data-lpignore="true"
                       className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
                     />
                     <span className="text-[11px] text-slate-400 mt-1 block">
@@ -1739,47 +1795,134 @@ export function AdminDashboard() {
             <div className="space-y-4">
               {users.map(u => (
                 <div key={u.id} className="border border-slate-200/90 rounded-xl p-4.5 bg-white hover:border-slate-300 transition-colors">
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 font-bold uppercase shrink-0">
-                        {u.username.charAt(0)}
+                  {editingUserId === u.id ? (
+                    <div className="p-4 bg-slate-50/90 rounded-lg border border-slate-200/90 space-y-3">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-200/70">
+                        <h5 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                          <Briefcase className="w-3.5 h-3.5 text-blue-600" />
+                          Edit Account Roles & Details: <span className="font-normal text-slate-600">{u.username}</span>
+                        </h5>
                       </div>
-                      <div>
-                        <div className="font-semibold text-slate-900 text-sm flex items-center gap-2">
-                          {u.username}
-                          {u.id === user?.id && (
-                            <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 font-medium px-1.5 py-0.5 rounded">
-                              Current Session
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-2">
-                          <span className={`inline-block font-semibold uppercase text-[11px] px-2 py-0.5 rounded-full ${
-                            u.role === 'admin'
-                              ? 'bg-purple-100 text-purple-800'
-                              : u.role === 'editor'
-                              ? 'bg-blue-100 text-blue-800'
-                              : 'bg-slate-100 text-slate-700'
-                          }`}>
-                            {u.role}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">
+                            Job Role / Title (Free field)
+                          </label>
+                          <input
+                            type="text"
+                            value={editJobRole}
+                            onChange={(e) => setEditJobRole(e.target.value)}
+                            placeholder="e.g. Information Security Officer, Legal Counsel"
+                            className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
+                          />
+                          <span className="text-[11px] text-slate-400 mt-0.5 block">
+                            Free text field specifying the user's organizational or professional position.
                           </span>
-                          <span>•</span>
-                          <span>ID #{u.id}</span>
                         </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">
+                            Portal Role Level
+                          </label>
+                          <select
+                            value={editRole}
+                            onChange={(e) => setEditRole(e.target.value)}
+                            disabled={u.id === user?.id}
+                            className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white disabled:opacity-50"
+                          >
+                            <option value="viewer">Viewer (Granular Permissions)</option>
+                            <option value="editor">Editor (Content Management)</option>
+                            <option value="admin">Administrator (Full Access)</option>
+                          </select>
+                          <span className="text-[11px] text-slate-400 mt-0.5 block">
+                            {u.id === user?.id ? "Cannot change role of currently logged in session." : "System permission level for portal access."}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex justify-end gap-2 pt-2 border-t border-slate-200/70">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setEditingUserId(null)}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            handleUpdateUser(u.id, { job_role: editJobRole, role: editRole });
+                            setEditingUserId(null);
+                          }}
+                        >
+                          Save Changes
+                        </Button>
                       </div>
                     </div>
-                    {u.id !== user?.id && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50 text-xs w-full sm:w-auto"
-                        onClick={() => setDeleteConfirm(u.id)}
-                      >
-                        <Trash2 className="w-3.5 h-3.5 mr-1" />
-                        Delete User
-                      </Button>
-                    )}
-                  </div>
+                  ) : (
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                      <div className="flex items-start sm:items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 font-bold uppercase shrink-0 mt-0.5 sm:mt-0">
+                          {u.username.charAt(0)}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-semibold text-slate-900 text-sm flex items-center gap-2 flex-wrap">
+                            <span className="truncate">{u.username}</span>
+                            {u.job_role ? (
+                              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700 bg-slate-100 border border-slate-200/90 px-2.5 py-0.5 rounded-md">
+                                <Briefcase className="w-3 h-3 text-slate-500 shrink-0" />
+                                <span>{u.job_role}</span>
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-slate-400 italic">No job role specified</span>
+                            )}
+                            {u.id === user?.id && (
+                              <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 font-medium px-1.5 py-0.5 rounded">
+                                Current Session
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
+                            <span className={`inline-block font-semibold uppercase text-[11px] px-2 py-0.5 rounded-full ${
+                              u.role === 'admin'
+                                ? 'bg-purple-100 text-purple-800'
+                                : u.role === 'editor'
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-slate-100 text-slate-700'
+                            }`}>
+                              {u.role}
+                            </span>
+                            <span>•</span>
+                            <span>Account ID #{u.id}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs flex items-center gap-1 text-slate-700"
+                          onClick={() => {
+                            setEditingUserId(u.id);
+                            setEditJobRole(u.job_role || '');
+                            setEditRole(u.role || 'viewer');
+                          }}
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                          Edit Role
+                        </Button>
+                        {u.id !== user?.id && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 text-xs"
+                            onClick={() => setDeleteConfirm(u.id)}
+                          >
+                            <Trash2 className="w-3.5 h-3.5 mr-1" />
+                            Delete User
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {u.role === 'viewer' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-100">
@@ -2415,10 +2558,10 @@ export function AdminDashboard() {
                   </div>
                   <h4 className="font-semibold text-slate-900 pr-12 text-sm">
                     <Link
-                      to={`/security-overview/${product.slug}`}
+                      to={`/security-features/${product.slug}`}
                       onClick={() => setLastSelectedProduct(product.slug)}
                       className="hover:text-blue-600 hover:underline transition-colors"
-                      title={`View ${product.name} Security Overview`}
+                      title={`View ${product.name} Security Features`}
                     >
                       {product.name}
                     </Link>
@@ -2521,8 +2664,8 @@ export function AdminDashboard() {
         icon={Bell}
         iconBg="bg-blue-100"
         iconColor="text-blue-700"
-        title="Control Subscriptions & Notification Lists"
-        subtitle="View, alter subscriber emails, change status (active/paused/cancelled), and export controls subscriptions"
+        title="Notification Subscriptions & Alert Lists"
+        subtitle="View, alter subscriber emails, change status (active/paused/cancelled), and export notification subscriptions"
         badge={
           <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
             Updates &amp; Alerts

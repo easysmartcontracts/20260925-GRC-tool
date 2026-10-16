@@ -130,7 +130,7 @@ export function SecurityOverview() {
       if (target) {
         setSelectedProduct(target);
         if (target !== slug) {
-          navigate(`/security-overview/${target}`, { replace: true });
+          navigate(`/security-features/${target}`, { replace: true });
         }
       }
     } else {
@@ -236,8 +236,8 @@ export function SecurityOverview() {
       )}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Security Overview</h1>
-          <p className="text-slate-600 mt-1">Detailed security information for our product portfolio.</p>
+          <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Security Features</h1>
+          <p className="text-slate-600 mt-1">Detailed security features, technical measures, and data protections for our product portfolio.</p>
         </div>
         
         <div className="flex items-center gap-2">
@@ -274,7 +274,7 @@ export function SecurityOverview() {
                   key={product.slug}
                   onClick={() => {
                     setLastSelectedProduct(product.slug);
-                    navigate(`/security-overview/${product.slug}`);
+                    navigate(`/security-features/${product.slug}`);
                     setIsEditing(false);
                   }}
                   aria-pressed={selectedProduct === product.slug}
@@ -293,126 +293,190 @@ export function SecurityOverview() {
             </div>
           </div>
 
-          {selectedProduct && (
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-              <div className="flex items-center gap-2 mb-1.5">
-                <Shield className="w-4 h-4 text-blue-600 shrink-0" />
-                <h4 className="font-bold text-sm text-slate-900">Security Controls</h4>
-              </div>
-              <p className="text-xs text-slate-600 mb-3 leading-relaxed">
-                Explore all security, infrastructure, and privacy controls implemented for{' '}
-                <span className="font-semibold text-slate-800">
-                  {displayProducts.find(p => p.slug === selectedProduct)?.name || 'this product'}
-                </span>.
-              </p>
-              <button
-                onClick={() => {
-                  setLastSelectedProduct(selectedProduct);
-                  navigate(`/controls/${selectedProduct}`);
-                }}
-                className="w-full bg-slate-900 text-white px-3.5 py-2.5 rounded-lg text-xs font-semibold hover:bg-slate-800 transition-colors shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <Shield className="w-3.5 h-3.5" />
-                <span>View {displayProducts.find(p => p.slug === selectedProduct)?.name || 'Product'} Controls</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
         </div>
 
         {/* Main Content */}
         <div className="w-full lg:w-3/4 space-y-8">
-          {/* Security Details */}
-      {selectedProduct && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 auto-rows-fr">
-          {SECURITY_TOPICS.map((topic) => {
-            const value = editData ? editData[topic.id] : null;
-            
-            return (
-              <div 
-                key={topic.id} 
-                className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between h-full"
-              >
-                {/* Header: Icon + Title + Description */}
-                <div className="flex flex-col mb-4">
-                  <div className="flex items-center gap-3 mb-2.5">
-                    <div className="p-2.5 bg-slate-50 border border-slate-100 rounded-lg shrink-0">
-                      {topic.icon}
-                    </div>
-                    <h3 className="font-semibold text-slate-900 text-base leading-snug">{topic.title}</h3>
-                  </div>
-                  <p className="text-sm text-slate-600 leading-relaxed min-h-[44px] flex items-start">
-                    {topic.description}
-                  </p>
-                </div>
-                
-                {/* Information Box: perfectly aligned across cards */}
-                <div className="mt-auto bg-slate-50 rounded-xl p-4 border border-slate-200/80 min-h-[80px] flex flex-col justify-center">
-                  {isEditing ? (
-                    topic.id === 'mfa' || topic.id === 'sso' ? (
-                      <div className="flex items-center gap-2.5">
-                        <input 
-                          type="checkbox" 
-                          id={`edit-${topic.id}`}
-                          checked={!!value}
-                          onChange={(e) => setEditData({...editData, [topic.id]: e.target.checked})}
-                          className="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900 cursor-pointer"
-                        />
-                        <label htmlFor={`edit-${topic.id}`} className="text-sm font-medium text-slate-700 cursor-pointer select-none">
-                          Supported
-                        </label>
-                      </div>
-                    ) : (
-                      <div className="space-y-1 w-full">
-                        <label htmlFor={`edit-${topic.id}`} className="sr-only">{topic.title}</label>
-                        <textarea
-                          id={`edit-${topic.id}`}
-                          value={value || ''}
-                          onChange={(e) => setEditData({...editData, [topic.id]: e.target.value})}
-                          className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900 resize-none leading-relaxed"
-                          rows={2}
-                          placeholder={`Enter ${topic.title.toLowerCase()} details...`}
-                        />
-                      </div>
-                    )
-                  ) : (
-                    typeof value === 'boolean' || topic.id === 'mfa' || topic.id === 'sso' ? (
-                      <div className="flex items-center gap-2.5">
-                        {value ? (
-                          <>
-                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-100 text-emerald-600 shrink-0">
-                              <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
-                            </span>
-                            <span className="text-slate-900 font-semibold text-sm">Supported</span>
-                          </>
+          {displayProducts.length === 0 && (
+            <div className="bg-white p-12 rounded-2xl border border-slate-200 shadow-sm text-center">
+              <h3 className="text-lg font-semibold text-slate-900">No Products Available</h3>
+              <p className="text-slate-500 max-w-md mx-auto mt-2">
+                {products.length === 0 
+                  ? "There are currently no products with security information to display."
+                  : "No products match your selected country filter."}
+              </p>
+            </div>
+          )}
+
+          {selectedProduct && (
+            <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
+              <div className="mb-6">
+                <h2 className="text-xl font-bold text-slate-900">Security Features & Measures</h2>
+                <p className="text-slate-600 text-sm mt-1">
+                  Technical safeguards, encryption standards, and platform security capabilities for {products.find(p => p.slug === selectedProduct)?.name || 'this product'}.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex flex-col space-y-3">
+                  {SECURITY_TOPICS.map((topic) => {
+                    const value = editData ? editData[topic.id] : null;
+                    
+                    return (
+                      <div 
+                        key={topic.id} 
+                        className="bg-white p-4 sm:px-5 sm:py-4 rounded-xl border border-slate-200 hover:border-slate-300 shadow-2xs transition-colors group"
+                      >
+                        {isEditing ? (
+                          <div className="flex items-start gap-3.5">
+                            <div className="p-2.5 bg-slate-50 border border-slate-100 rounded-lg shrink-0 mt-0.5">
+                              {topic.icon}
+                            </div>
+                            <div className="min-w-0 flex-1 space-y-3">
+                              <div>
+                                <h4 className="font-bold text-slate-900 text-base">{topic.title}</h4>
+                                <p className="text-xs sm:text-sm text-slate-500 mt-0.5 leading-relaxed">{topic.description}</p>
+                              </div>
+
+                              {topic.id === 'mfa' || topic.id === 'sso' ? (
+                                <div className="flex items-center gap-2.5 pt-1">
+                                  <input 
+                                    type="checkbox" 
+                                    id={`edit-${topic.id}`}
+                                    checked={!!value}
+                                    onChange={(e) => setEditData({...editData, [topic.id]: e.target.checked})}
+                                    className="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900 cursor-pointer"
+                                  />
+                                  <label htmlFor={`edit-${topic.id}`} className="text-sm font-medium text-slate-800 cursor-pointer select-none">
+                                    Supported for this product
+                                  </label>
+                                </div>
+                              ) : (
+                                <div>
+                                  <label htmlFor={`edit-${topic.id}`} className="block text-xs font-semibold text-slate-700 mb-1">
+                                    Specification / Details
+                                  </label>
+                                  <input 
+                                    type="text"
+                                    id={`edit-${topic.id}`}
+                                    value={value || ''}
+                                    onChange={(e) => setEditData({...editData, [topic.id]: e.target.value})}
+                                    className="w-full bg-white border border-slate-200 rounded-lg px-3.5 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900 leading-relaxed"
+                                    placeholder={`Enter ${topic.title.toLowerCase()} details...`}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         ) : (
-                          <>
-                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-100 text-red-600 shrink-0">
-                              <XCircle className="w-4 h-4" aria-hidden="true" />
-                            </span>
-                            <span className="text-slate-900 font-semibold text-sm">Not Supported</span>
-                          </>
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                              <div className="p-2.5 bg-slate-50 border border-slate-100 rounded-lg shrink-0 mt-0.5">
+                                {topic.icon}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                                  <h4 className="font-bold text-slate-900 text-base">{topic.title}</h4>
+                                  <div className="flex items-center gap-2 text-xs font-medium text-slate-500 flex-wrap">
+                                    {topic.id === 'mfa' || topic.id === 'sso' ? (
+                                      value ? (
+                                        <span className="bg-emerald-100 text-emerald-800 text-[11px] font-semibold px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                                          <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Supported
+                                        </span>
+                                      ) : (
+                                        <span className="bg-slate-100 text-slate-600 text-[11px] font-semibold px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                                          <XCircle className="w-3 h-3 text-slate-400" /> Inactive
+                                        </span>
+                                      )
+                                    ) : (
+                                      <span className="bg-slate-100 text-slate-700 text-[11px] font-semibold px-2 py-0.5 rounded-full">
+                                        Standard Measure
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <p className="text-sm text-slate-600 mt-1 leading-relaxed">
+                                  {topic.description}
+                                </p>
+                                {!(topic.id === 'mfa' || topic.id === 'sso') && (
+                                  <div className="mt-2 text-xs sm:text-sm font-medium text-slate-800 bg-slate-50 border border-slate-200/80 rounded-lg px-3 py-2 flex items-baseline gap-2">
+                                    <span className="text-slate-500 text-xs font-semibold uppercase tracking-wider shrink-0">Specification:</span>
+                                    <span className="text-slate-900 font-semibold">{value || <span className="text-slate-400 italic font-normal">Not configured</span>}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Right side status / value badge */}
+                            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                              {topic.id === 'mfa' || topic.id === 'sso' ? (
+                                value ? (
+                                  <div className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold rounded-lg whitespace-nowrap">
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                    <span>Supported</span>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-50 text-slate-600 border border-slate-200 text-xs font-semibold rounded-lg whitespace-nowrap">
+                                    <XCircle className="w-4 h-4 text-slate-400 shrink-0" />
+                                    <span>Not Supported</span>
+                                  </div>
+                                )
+                              ) : topic.id === 'sla_uptime' ? (
+                                <div className="flex items-center gap-1.5 px-3.5 py-2 bg-purple-50 text-purple-700 border border-purple-200 text-xs font-bold rounded-lg whitespace-nowrap">
+                                  <Activity className="w-4 h-4 text-purple-600 shrink-0" />
+                                  <span>{value || '99.9%'} SLA</span>
+                                </div>
+                              ) : topic.id === 'data_residency' ? (
+                                <div className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-50 text-slate-800 border border-slate-200 text-xs font-semibold rounded-lg whitespace-nowrap">
+                                  <Globe className="w-4 h-4 text-slate-500 shrink-0" />
+                                  <span>{value || 'EU'}</span>
+                                </div>
+                              ) : topic.id === 'encryption' ? (
+                                <div className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-semibold rounded-lg whitespace-nowrap">
+                                  <Lock className="w-4 h-4 text-indigo-600 shrink-0" />
+                                  <span>Enforced</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-50 text-blue-700 border border-blue-200 text-xs font-semibold rounded-lg whitespace-nowrap">
+                                  <Database className="w-4 h-4 text-blue-600 shrink-0" />
+                                  <span>Automated</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         )}
                       </div>
-                    ) : (
-                      <p className="text-slate-900 font-medium text-sm leading-relaxed">
-                        {value || <span className="text-slate-400 italic font-normal">No information provided.</span>}
-                      </p>
-                    )
-                  )}
+                    );
+                  })}
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
 
-      {isEditing && (
-        <div className="flex justify-end gap-2 pt-4">
-          <Button variant="outline" onClick={() => setIsEditing(false)}>Cancel</Button>
-          <Button onClick={handleSave}>Save Changes</Button>
-        </div>
-      )}
+                {isEditing && (
+                  <div className="flex justify-end gap-3 pt-6 border-t border-slate-200">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        setIsEditing(false);
+                        setEditData(productSecurity || {
+                          backup: '',
+                          mfa: false,
+                          encryption: '',
+                          sso: false,
+                          data_residency: '',
+                          sla_uptime: ''
+                        });
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button onClick={handleSave} className="flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4" />
+                      Save Changes
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

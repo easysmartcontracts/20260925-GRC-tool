@@ -2139,6 +2139,21 @@ async function startServer() {
     }
   });
 
+  app.get('/api/public/all-certifications', async (req, res) => {
+    try {
+      const [certs]: any = await pool.query(`
+        SELECT pc.*, p.name as product_name
+        FROM product_certifications pc
+        JOIN products p ON pc.product_slug = p.slug
+        ORDER BY pc.id ASC
+      `);
+      res.json(certs);
+    } catch (err) {
+      console.error('Error fetching all certifications:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   app.get('/api/public/dashboard-settings', async (req, res) => {
     try {
       const [settings]: any = await pool.query('SELECT "key", "value" FROM dashboard_settings');

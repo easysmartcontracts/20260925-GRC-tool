@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Shield, FileText, Lock, ExternalLink, Edit2, Check, X, Plus, Trash2, AlertCircle, ChevronRight } from 'lucide-react';
+import { Shield, ShieldCheck, FileText, Lock, ExternalLink, Edit2, Check, X, Plus, Trash2, AlertCircle, ChevronRight } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import { ConfirmationModal } from '../components/ui/ConfirmationModal';
 import { useAuth } from '../contexts/AuthContext';
@@ -26,7 +26,7 @@ type Document = {
   product_name?: string;
   type: string;
   category: string;
-  requires_nda: boolean | number;
+  requires_nda?: boolean | number;
   soa_available?: boolean;
   url?: string;
   description?: string;
@@ -39,15 +39,14 @@ export function Dashboard() {
   const [recentDocs, setRecentDocs] = useState<Document[]>([]);
   const [allDocs, setAllDocs] = useState<Document[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [latestControls, setLatestControls] = useState<any[]>([]);
-  const [allControls, setAllControls] = useState<any[]>([]);
+  const [allCertifications, setAllCertifications] = useState<any[]>([]);
+  const [displayCertifications, setDisplayCertifications] = useState<any[]>([]);
   const [settings, setSettings] = useState({
     welcome_message: 'Insights into security, compliance, and policies.',
     important_notification: '',
     notification_global: true,
     notification_countries: [] as string[],
     pinned_documents: {} as Record<string, string[]>,
-    pinned_controls: {} as Record<string, string[]>,
     show_status_page_link: true
   });
   const [isEditingSettings, setIsEditingSettings] = useState(false);
@@ -126,18 +125,18 @@ export function Dashboard() {
     });
   };
 
-  const fetchControls = () => {
-    fetchJson<any[]>('/api/public/all-controls')
+  const fetchCertifications = () => {
+    fetchJson<any[]>('/api/public/all-certifications')
       .then(data => {
-        if (Array.isArray(data)) setAllControls(data);
+        if (Array.isArray(data)) setAllCertifications(data);
       })
-      .catch(err => console.warn('Could not fetch controls:', err));
+      .catch(err => console.warn('Could not fetch certifications:', err));
   };
 
   useEffect(() => {
     fetchSettings();
     fetchProducts();
-    fetchControls();
+    fetchCertifications();
     fetchDocuments();
   }, []);
 
@@ -173,28 +172,17 @@ export function Dashboard() {
   }, [allDocs, settings.pinned_documents, country, products]);
 
   useEffect(() => {
-    if (allControls.length > 0) {
-      const filteredControls = allControls.filter(c => {
+    if (allCertifications.length > 0) {
+      const filtered = allCertifications.filter(c => {
         const p = products.find(prod => prod.slug === c.product_slug);
         const matchesCountry = country === 'all' || !p?.countries || p.countries.length === 0 || p.countries.includes(country);
         return matchesCountry;
       });
-
-      const regionControls = settings.pinned_controls?.[country];
-      const pinnedControlsForRegion = (Array.isArray(regionControls) && regionControls.length > 0)
-        ? regionControls
-        : (settings.pinned_controls?.['all'] || []);
-
-      if (pinnedControlsForRegion.length > 0) {
-        const pinned = pinnedControlsForRegion
-          .map(id => filteredControls.find(c => `${c.product_slug}-${c.topic_id}` === id) || allControls.find(c => `${c.product_slug}-${c.topic_id}` === id))
-          .filter(Boolean);
-        setLatestControls(pinned.length > 0 ? pinned : filteredControls.slice(0, 3));
-      } else {
-        setLatestControls(filteredControls.slice(0, 3));
-      }
+      setDisplayCertifications(filtered.slice(0, 4));
+    } else {
+      setDisplayCertifications([]);
     }
-  }, [allControls, settings.pinned_controls, country, products]);
+  }, [allCertifications, country, products]);
 
   const handleSaveSettings = async () => {
     try {
@@ -317,10 +305,6 @@ export function Dashboard() {
     } finally {
       setDeleteConfirm(null);
     }
-  };
-
-  const formatTopicName = (id: string) => {
-    return id.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
   };
 
   return (
@@ -673,43 +657,6 @@ export function Dashboard() {
                       {allDocs.filter(doc => editingDocProduct === 'all' || doc.products?.includes(editingDocProduct)).length === 0 && <p className="text-sm text-slate-500 p-2">No documents available for this product.</p>}
                     </div>
                   </div>
-
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="block text-sm font-medium text-slate-700">
-                        Pinned Controls for {editingRegion === 'all' ? 'Global' : COUNTRIES.find(c => c.code === editingRegion)?.name}
-                      </label>
-                      <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
-                        {(settingsForm.pinned_controls?.[editingRegion] || []).length} pinned
-                      </span>
-                    </div>
-                    <div className="border border-slate-200 rounded-md max-h-56 overflow-y-auto p-2 space-y-1">
-                      {allControls.filter(control => editingDocProduct === 'all' || control.product_slug === editingDocProduct).map(control => {
-                        const id = `${control.product_slug}-${control.topic_id}`;
-                        return (
-                          <label key={id} className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded cursor-pointer">
-                            <input 
-                              type="checkbox" 
-                              checked={(settingsForm.pinned_controls?.[editingRegion] || []).includes(id)}
-                              onChange={(e) => {
-                                const list = settingsForm.pinned_controls?.[editingRegion] || [];
-                                const newPinned = e.target.checked 
-                                  ? [...list, id]
-                                  : list.filter(s => s !== id);
-                                setSettingsForm({
-                                  ...settingsForm, 
-                                  pinned_controls: { ...settingsForm.pinned_controls, [editingRegion]: newPinned }
-                                });
-                              }}
-                              className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                            />
-                            <span className="text-sm text-slate-700">{formatTopicName(control.topic_id)} <span className="text-slate-400 text-xs">({control.product_name})</span></span>
-                          </label>
-                        );
-                      })}
-                      {allControls.filter(control => editingDocProduct === 'all' || control.product_slug === editingDocProduct).length === 0 && <p className="text-sm text-slate-500 p-2">No controls available for this product.</p>}
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
@@ -854,17 +801,15 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Latest Controls */}
+        {/* Certifications and Reports */}
         <Card className="flex flex-col">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2">
-              <Shield className="w-5 h-5 text-slate-400" />
-              {((settings.pinned_controls?.[country]?.length || 0) > 0 || (settings.pinned_controls?.['all']?.length || 0) > 0)
-                ? 'Pinned Controls'
-                : 'Latest Controls'}
+              <ShieldCheck className="w-5 h-5 text-emerald-600" />
+              Certifications &amp; Reports
             </CardTitle>
             <Link 
-              to="/controls"
+              to="/certifications"
               className="text-sm font-medium text-blue-600 hover:text-blue-800"
             >
               View All
@@ -872,28 +817,38 @@ export function Dashboard() {
           </CardHeader>
           <CardContent className="p-0 flex-1">
             <div className="divide-y divide-slate-100">
-              {latestControls.length > 0 ? (
-                latestControls.map((ctrl, idx) => (
-                  <div key={`${ctrl.product_slug}-${ctrl.topic_id}-${idx}`} className="p-4 hover:bg-slate-50 transition-colors">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="font-medium text-slate-900">{formatTopicName(ctrl.topic_id)}</h4>
-                        <p className="text-xs text-slate-600 mt-0.5">{ctrl.product_name}</p>
+              {displayCertifications.length > 0 ? (
+                displayCertifications.map((cert, idx) => (
+                  <div key={`${cert.product_slug}-${cert.id}-${idx}`} className="p-4 hover:bg-slate-50 transition-colors flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-medium text-slate-900">{cert.name}</h4>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                          cert.type === 'report' ? 'bg-blue-100 text-blue-800' : 'bg-emerald-100 text-emerald-800'
+                        }`}>
+                          {cert.type === 'report' ? 'Report' : 'Certificate'}
+                        </span>
                       </div>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
-                        ctrl.status === 'Implemented' ? 'bg-emerald-100 text-emerald-800' : 
-                        ctrl.status === 'Partial' ? 'bg-amber-100 text-amber-800' : 
-                        'bg-red-100 text-red-800'
-                      }`}>
-                        {ctrl.status}
-                      </span>
+                      <p className="text-xs text-slate-600 mt-1">{cert.product_name}</p>
                     </div>
-                    <p className="text-sm text-slate-600 mt-2 line-clamp-1">{ctrl.description}</p>
+                    <div className="shrink-0">
+                      {cert.certificate_url && (
+                        <a
+                          href={cert.certificate_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-colors"
+                        >
+                          View
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                    </div>
                   </div>
                 ))
               ) : (
                 <div className="p-8 text-center text-slate-600 italic font-medium">
-                  No controls found.
+                  No certifications found.
                 </div>
               )}
             </div>
@@ -959,10 +914,10 @@ export function Dashboard() {
                   </div>
                   <h4 className="font-semibold text-slate-900 pr-6 text-base">
                     <Link
-                      to={`/security-overview/${product.slug}`}
+                      to={`/security-features/${product.slug}`}
                       onClick={() => setLastSelectedProduct(product.slug)}
                       className="hover:text-blue-600 transition-colors inline-flex items-center gap-1 group/pname"
-                      title={`View ${product.name} Security Overview`}
+                      title={`View ${product.name} Security Features`}
                     >
                       <span className="hover:underline">{product.name}</span>
                       <ChevronRight className="w-3.5 h-3.5 text-blue-500 opacity-0 group-hover/pname:opacity-100 transition-opacity shrink-0" />

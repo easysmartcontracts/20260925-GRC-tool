@@ -72,7 +72,6 @@ export function ProductDetail() {
   const [relatedDocs, setRelatedDocs] = useState<any[]>([]);
   const [relatedSubprocessors, setRelatedSubprocessors] = useState<any[]>([]);
   const [securityData, setSecurityData] = useState<any>(null);
-  const [controls, setControls] = useState<any[]>([]);
   const [certifications, setCertifications] = useState<any[]>([]);
   const [policies, setPolicies] = useState<any[]>([]);
   const [inspectingSub, setInspectingSub] = useState<any | null>(null);
@@ -111,12 +110,11 @@ export function ProductDetail() {
     setIsLoading(true);
     try {
       const qs = country !== 'all' ? `?country=${country}` : '';
-      const [allProducts, legalDocs, subsData, secData, ctrlData, certData, polData, genData] = await Promise.all([
+      const [allProducts, legalDocs, subsData, secData, certData, polData, genData] = await Promise.all([
         fetchPublicProducts(),
         fetchJson<any[]>(`/api/public/product-legal/${slug}${qs}`).catch(() => []),
         fetchJson<any>(`/api/public/product-subprocessors/${slug}${qs}`).catch(() => ({})),
         fetchJson<any>(`/api/public/product-security/${slug}`).catch(() => null),
-        fetchJson<any[]>(`/api/public/product-controls/${slug}`).catch(() => []),
         fetchJson<any>(`/api/public/product-certifications/${slug}`).catch(() => ({})),
         fetchJson<any[]>(`/api/public/product-policies/${slug}${qs}`).catch(() => []),
         fetchJson<any>(`/api/public/product-general/${slug}`).catch(() => null)
@@ -138,7 +136,6 @@ export function ProductDetail() {
       if (subsData && Array.isArray(subsData.subprocessors)) setRelatedSubprocessors(subsData.subprocessors);
       if (secData && !secData.error) setSecurityData(secData);
       else setSecurityData(null);
-      if (Array.isArray(ctrlData)) setControls(ctrlData);
       if (certData && Array.isArray(certData.certifications)) setCertifications(certData.certifications);
       if (Array.isArray(polData)) setPolicies(polData);
       if (genData) {
@@ -738,43 +735,6 @@ export function ProductDetail() {
             </CardContent>
           </Card>
         )}
-
-        {/* Controls */}
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ShieldAlert className="w-5 h-5 text-slate-400" />
-              Controls
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {controls && controls.length > 0 ? (
-              <div className="divide-y divide-slate-100">
-                {controls.map((control: any) => {
-                  const formatTopicName = (id: string) => {
-                    return id.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-                  };
-                  return (
-                  <div key={control.topic_id} className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50 transition-colors">
-                    <div className="flex-1">
-                      <h4 className="font-medium text-slate-900">{formatTopicName(control.topic_id)}</h4>
-                      <p className="text-sm text-slate-500 mt-1">{control.description || 'No description provided.'}</p>
-                    </div>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold self-start md:self-center shrink-0 ${
-                      control.status === 'Implemented' ? 'bg-emerald-100 text-emerald-800' : 
-                      control.status === 'Partial' ? 'bg-amber-100 text-amber-800' : 
-                      'bg-red-100 text-red-800'
-                    }`}>
-                      {control.status}
-                    </span>
-                  </div>
-                )})}
-              </div>
-            ) : (
-              <div className="p-6 text-center text-slate-500 text-sm">No controls listed.</div>
-            )}
-          </CardContent>
-        </Card>
 
         {/* Certifications and Reports */}
         <Card>

@@ -120,9 +120,14 @@ export async function initDb() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username VARCHAR(255) UNIQUE NOT NULL,
       password_hash VARCHAR(255) NOT NULL,
-      role VARCHAR(50) NOT NULL DEFAULT 'viewer'
+      role VARCHAR(50) NOT NULL DEFAULT 'viewer',
+      job_role VARCHAR(255) DEFAULT ''
     )
   `);
+
+  try {
+    await runDual("ALTER TABLE users ADD COLUMN job_role VARCHAR(255) DEFAULT ''");
+  } catch (err) {}
 
   // User Modules table
   await runDual(`
@@ -249,9 +254,14 @@ export async function initDb() {
   if (userCount.count === 0) {
     const rawPassword = process.env.INITIAL_ADMIN_PASSWORD || 'BjornLunden2026!';
     const hash = bcrypt.hashSync(rawPassword, 10);
-    await runDual('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)', ['security@bjornlunden.com', hash, 'admin']);
-    await runDual('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)', ['admin', hash, 'admin']);
+    await runDual('INSERT INTO users (username, password_hash, role, job_role) VALUES (?, ?, ?, ?)', ['security@bjornlunden.com', hash, 'admin', 'Chief Information Security Officer']);
+    await runDual('INSERT INTO users (username, password_hash, role, job_role) VALUES (?, ?, ?, ?)', ['admin', hash, 'admin', 'System Administrator']);
     console.log('Created default admin users: security@bjornlunden.com and admin');
+  } else {
+    try {
+      await runDual("UPDATE users SET job_role = 'Chief Information Security Officer' WHERE username = 'security@bjornlunden.com' AND (job_role IS NULL OR job_role = '')");
+      await runDual("UPDATE users SET job_role = 'System Administrator' WHERE username = 'admin' AND (job_role IS NULL OR job_role = '')");
+    } catch (err) {}
   }
 
   // Seed default dashboard settings

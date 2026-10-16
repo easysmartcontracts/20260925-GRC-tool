@@ -41,8 +41,7 @@ export function ModuleProducts({ moduleName }: ModuleProductsProps) {
 
   const getModuleTitle = (name: string) => {
     switch (name) {
-      case 'security-overview': return 'Security Overview';
-      case 'controls': return 'Controls';
+      case 'security-overview': return 'Security features';
       case 'certifications': return 'Certifications and Reports';
       case 'policies': return 'Policies';
       case 'dpa': return 'DPA & DPIA';

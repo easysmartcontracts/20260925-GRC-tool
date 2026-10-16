@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Scale, FileText, Mail, Globe, CheckCircle2, XCircle, Plus, Trash2, ExternalLink, Calendar, History, Edit2, X, Save, Filter, ChevronDown, ChevronUp, FileSignature } from 'lucide-react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { Scale, FileText, Mail, Globe, CheckCircle2, XCircle, Plus, Trash2, ExternalLink, Calendar, History, Edit2, X, Save, Filter, ChevronDown, ChevronUp, FileSignature, Shield } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useRequestAccess } from '../contexts/RequestAccessContext';
 import { useCountry } from '../hooks/useCountry';
@@ -20,6 +20,16 @@ type LegalDocument = {
   is_current: number;
 };
 
+type Policy = {
+  id: number;
+  product_slug: string;
+  name: string;
+  description: string;
+  is_requestable: number;
+  effective_date?: string;
+  version?: string;
+};
+
 const DOCUMENT_TYPES = [
   { id: 'tc', title: 'Terms and Conditions', description: 'General terms of service and usage conditions.' },
   { id: 'privacy', title: 'Privacy Notice', description: 'Details on how personal data is collected and processed.' },
@@ -37,7 +47,14 @@ export function Legal() {
   const [selectedProduct, setSelectedProduct] = useState<string | null>(() => slug || getLastSelectedProduct() || null);
   const [isPublic, setIsPublic] = useState(false);
   
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') === 'policies' ? 'policies' : 'documents';
+
   const [documents, setDocuments] = useState<LegalDocument[]>([]);
+  const [policies, setPolicies] = useState<Policy[]>([]);
+  const [newPolicy, setNewPolicy] = useState({ name: '', description: '', is_requestable: 1, effective_date: '', version: '' });
+  const [editingPolicyId, setEditingPolicyId] = useState<number | null>(null);
+  const [editPolicyState, setEditPolicyState] = useState({ name: '', description: '', is_requestable: 1, effective_date: '', version: '' });
 
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const country = useCountry();
@@ -111,9 +128,109 @@ export function Legal() {
     }
   };
 
+  const fetchPolicies = () => {
+    if (selectedProduct) {
+      fetchJson<Policy[]>(`/api/public/product-policies/${selectedProduct}`)
+        .then(data => {
+          if (Array.isArray(data)) setPolicies(data);
+        })
+        .catch(err => console.warn('Could not fetch policies:', err));
+    }
+  };
+
   useEffect(() => {
     fetchDocuments();
+    fetchPolicies();
   }, [selectedProduct]);
+
+  const handleRequestPolicy = (policyName: string) => {
+    const productName = products.find(p => p.slug === selectedProduct)?.name || '';
+    openRequestAccess({
+      documentName: `Policy: ${policyName}`,
+      productName,
+      productSlug: selectedProduct || 'general',
+      documentType: 'policy',
+      recipientEmail: siteSettings?.mailto_policies || 'security@bjornlunden.com'
+    });
+  };
+
+  const handleAddPolicy = async () => {
+    if (!selectedProduct || !newPolicy.name) return;
+    try {
+      const res = await fetch(`/api/admin/product-policies/${selectedProduct}`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
+        credentials: 'include',
+        body: JSON.stringify(newPolicy)
+      });
+      if (res.ok) {
+        fetchPolicies();
+        setNewPolicy({ name: '', description: '', is_requestable: 1, effective_date: '', version: '' });
+        setToast({ message: 'Policy added successfully!', type: 'success' });
+        setTimeout(() => setToast(null), 3000);
+      } else {
+        setToast({ message: 'Failed to add policy', type: 'error' });
+        setTimeout(() => setToast(null), 3000);
+      }
+    } catch (err) {
+      console.error(err);
+      setToast({ message: 'Network error occurred', type: 'error' });
+      setTimeout(() => setToast(null), 3000);
+    }
+  };
+
+  const handleUpdatePolicy = async (id: number) => {
+    if (!editPolicyState.name) return;
+    try {
+      const res = await fetch(`/api/admin/product-policies/${id}`, {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
+        credentials: 'include',
+        body: JSON.stringify(editPolicyState)
+      });
+      if (res.ok) {
+        fetchPolicies();
+        setEditingPolicyId(null);
+        setToast({ message: 'Policy updated successfully!', type: 'success' });
+        setTimeout(() => setToast(null), 3000);
+      } else {
+        setToast({ message: 'Failed to update policy', type: 'error' });
+        setTimeout(() => setToast(null), 3000);
+      }
+    } catch (err) {
+      console.error(err);
+      setToast({ message: 'Network error occurred', type: 'error' });
+      setTimeout(() => setToast(null), 3000);
+    }
+  };
+
+  const handleDeletePolicy = async (id: number) => {
+    try {
+      const res = await fetch(`/api/admin/product-policies/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+        credentials: 'include'
+      });
+      if (res.ok) {
+        setPolicies(prev => prev.filter(p => p.id !== id));
+        setToast({ message: 'Policy deleted successfully!', type: 'success' });
+        setTimeout(() => setToast(null), 3000);
+      } else {
+        setToast({ message: 'Failed to delete policy', type: 'error' });
+        setTimeout(() => setToast(null), 3000);
+      }
+    } catch (err) {
+      console.error(err);
+      setToast({ message: 'Network error occurred', type: 'error' });
+      setTimeout(() => setToast(null), 3000);
+    }
+  };
 
   useEffect(() => {
     setIsPublic(publicPages.includes('legal'));
@@ -600,111 +717,351 @@ export function Legal() {
 
       {selectedProduct && (
         <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
-          <div className="mb-6">
-            <h2 className="text-xl font-bold text-slate-900">Legal & Privacy Documents</h2>
-            <p className="text-slate-600 text-sm mt-1">Review terms, privacy notices, SLAs, and data protection agreements for this product.</p>
+          {/* Sub-navigation Tabs: Legal Documents vs Policies */}
+          <div className="flex flex-wrap items-center gap-2 mb-6 border-b border-slate-200 pb-4">
+            <button
+              type="button"
+              onClick={() => {
+                const newParams = new URLSearchParams(searchParams);
+                newParams.delete('tab');
+                setSearchParams(newParams);
+              }}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
+                activeTab === 'documents'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200'
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              <span>Legal Documents</span>
+              <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                activeTab === 'documents' ? 'bg-slate-800 text-slate-200' : 'bg-slate-100 text-slate-600'
+              }`}>
+                {documents.filter(d => d.is_current === 1).length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                const newParams = new URLSearchParams(searchParams);
+                newParams.set('tab', 'policies');
+                setSearchParams(newParams);
+              }}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
+                activeTab === 'policies'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200'
+              }`}
+            >
+              <Shield className="w-4 h-4" />
+              <span>Policies</span>
+              <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                activeTab === 'policies' ? 'bg-slate-800 text-slate-200' : 'bg-slate-100 text-slate-600'
+              }`}>
+                {policies.length}
+              </span>
+            </button>
           </div>
 
-          <div className="space-y-4">
-            <div className="flex flex-col space-y-3">
-              {allDocumentSections.map((typeDef, index) => renderDocumentSection(typeDef, index))}
+          {activeTab === 'documents' && (
+            <div>
+              <div className="mb-6">
+                <h2 className="text-xl font-bold text-slate-900">Legal & Privacy Documents</h2>
+                <p className="text-slate-600 text-sm mt-1">Review terms, privacy notices, SLAs, and data protection agreements for this product.</p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex flex-col space-y-3">
+                  {allDocumentSections.map((typeDef, index) => renderDocumentSection(typeDef, index))}
+                </div>
+
+                {/* Admin Add Custom Legal Document Section at Bottom */}
+                {(user?.role === 'admin' || user?.role === 'moderator') && (
+                  <div className="bg-slate-50 p-5 rounded-xl border border-dashed border-slate-300 flex flex-col gap-3 mt-4">
+                    <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                      <Plus className="w-4 h-4 text-blue-600" /> Add Custom Legal Document Section
+                    </h4>
+                    <p className="text-xs text-slate-500">
+                      Add another type of legal document not listed above (e.g. Master Services Agreement, Business Associate Agreement).
+                    </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-700 mb-1">Document Title / Section Name *</label>
+                        <input 
+                          type="text" 
+                          placeholder="e.g. Master Services Agreement"
+                          value={customSectionTitle}
+                          onChange={(e) => setCustomSectionTitle(e.target.value)}
+                          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-700 mb-1">Document URL</label>
+                        <input 
+                          type="url" 
+                          placeholder="https://..."
+                          value={newDoc.url || ''}
+                          onChange={(e) => setNewDoc({...newDoc, url: e.target.value})}
+                          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-700 mb-1">Or Upload PDF Document</label>
+                        <div className="flex items-center gap-2">
+                          <input 
+                            type="file" 
+                            accept="application/pdf"
+                            onChange={handleFileUpload}
+                            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
+                          />
+                          {newDoc.file_url && (
+                            <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-md shrink-0 border border-green-200">
+                              Uploaded
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700 mb-1">Effective Date</label>
+                          <input 
+                            type="date" 
+                            value={newDoc.effective_date || ''}
+                            onChange={(e) => setNewDoc({...newDoc, effective_date: e.target.value})}
+                            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700 mb-1">Version</label>
+                          <input 
+                            type="text" 
+                            placeholder="v1.0"
+                            value={newDoc.version || ''}
+                            onChange={(e) => setNewDoc({...newDoc, version: e.target.value})}
+                            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+                      <div className="flex items-center gap-2">
+                        <input 
+                          type="checkbox" 
+                          id="custom-current-bottom"
+                          checked={newDoc.is_current === 1}
+                          onChange={(e) => setNewDoc({...newDoc, is_current: e.target.checked ? 1 : 0})}
+                          className="rounded border-slate-300 text-slate-900 focus:ring-slate-900"
+                        />
+                        <label htmlFor="custom-current-bottom" className="text-sm font-medium text-slate-700">
+                          Set as current active version
+                        </label>
+                      </div>
+                      <Button 
+                        onClick={() => handleSaveDoc(customSectionTitle)} 
+                        disabled={!customSectionTitle.trim() || (!newDoc.url && !newDoc.file_url)}
+                        size="sm" 
+                        className="sm:w-auto w-full"
+                      >
+                        Add Custom Document
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
+          )}
 
-            {/* Admin Add Custom Legal Document Section at Bottom (matching Add Policy in Policies.tsx) */}
-            {(user?.role === 'admin' || user?.role === 'moderator') && (
-              <div className="bg-slate-50 p-5 rounded-xl border border-dashed border-slate-300 flex flex-col gap-3 mt-4">
-                <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                  <Plus className="w-4 h-4 text-blue-600" /> Add Custom Legal Document Section
-                </h4>
-                <p className="text-xs text-slate-500">
-                  Add another type of legal document not listed above (e.g. Master Services Agreement, Business Associate Agreement).
-                </p>
+          {activeTab === 'policies' && (
+            <div>
+              <div className="mb-6">
+                <h2 className="text-xl font-bold text-slate-900">Product Policies</h2>
+                <p className="text-slate-600 text-sm mt-1">Security, operational, and data governance policies applicable to this product.</p>
+              </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">Document Title / Section Name *</label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g. Master Services Agreement"
-                      value={customSectionTitle}
-                      onChange={(e) => setCustomSectionTitle(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">Document URL</label>
-                    <input 
-                      type="url" 
-                      placeholder="https://..."
-                      value={newDoc.url || ''}
-                      onChange={(e) => setNewDoc({...newDoc, url: e.target.value})}
-                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">Or Upload PDF Document</label>
-                    <div className="flex items-center gap-2">
-                      <input 
-                        type="file" 
-                        accept="application/pdf"
-                        onChange={handleFileUpload}
-                        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
-                      />
-                      {newDoc.file_url && (
-                        <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-md shrink-0 border border-green-200">
-                          Uploaded
-                        </span>
+              <div className="space-y-4">
+                <div className="flex flex-col space-y-3">
+                  {policies.map((policy) => (
+                    <div key={policy.id} className="bg-white p-4 sm:px-5 sm:py-4 rounded-xl border border-slate-200 hover:border-slate-300 shadow-2xs transition-colors group">
+                      {editingPolicyId === policy.id ? (
+                        <div className="flex flex-col space-y-3">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <input 
+                              type="text" 
+                              value={editPolicyState.name}
+                              onChange={(e) => setEditPolicyState({...editPolicyState, name: e.target.value})}
+                              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 md:col-span-1"
+                              placeholder="Policy Name"
+                            />
+                            <input 
+                              type="date" 
+                              value={editPolicyState.effective_date}
+                              onChange={(e) => setEditPolicyState({...editPolicyState, effective_date: e.target.value})}
+                              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                              placeholder="Effective Date"
+                            />
+                            <input 
+                              type="text" 
+                              value={editPolicyState.version}
+                              onChange={(e) => setEditPolicyState({...editPolicyState, version: e.target.value})}
+                              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                              placeholder="Version (e.g. 1.0)"
+                            />
+                          </div>
+                          <textarea 
+                            value={editPolicyState.description}
+                            onChange={(e) => setEditPolicyState({...editPolicyState, description: e.target.value})}
+                            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 resize-none h-20"
+                            placeholder="Description"
+                          />
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-100">
+                            <div className="flex items-center gap-2">
+                              <input 
+                                type="checkbox" 
+                                id={`policy-edit-requestable-${policy.id}`}
+                                checked={editPolicyState.is_requestable === 1}
+                                onChange={(e) => setEditPolicyState({...editPolicyState, is_requestable: e.target.checked ? 1 : 0})}
+                                className="rounded border-slate-300 text-slate-900 focus:ring-slate-900"
+                              />
+                              <label htmlFor={`policy-edit-requestable-${policy.id}`} className="text-sm font-medium text-slate-700">
+                                Allow users to request this policy
+                              </label>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button variant="outline" size="sm" onClick={() => setEditingPolicyId(null)}>
+                                Cancel
+                              </Button>
+                              <Button size="sm" onClick={() => handleUpdatePolicy(policy.id)}>
+                                Save
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                              <h4 className="font-bold text-slate-900 text-base">{policy.name}</h4>
+                              {(policy.version || policy.effective_date) && (
+                                <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
+                                  {policy.version && <span>Version {policy.version}</span>}
+                                  {policy.version && policy.effective_date && <span aria-hidden="true">·</span>}
+                                  {policy.effective_date && <span>Effective {new Date(policy.effective_date).toLocaleDateString()}</span>}
+                                </div>
+                              )}
+                            </div>
+                            {policy.description && (
+                              <p className="text-sm text-slate-600 mt-1 leading-relaxed">{policy.description}</p>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                            {policy.is_requestable === 1 && (
+                              <button 
+                                onClick={() => handleRequestPolicy(policy.name)}
+                                className="flex items-center gap-2 px-3.5 py-2 bg-slate-900 text-white text-xs font-medium rounded-lg hover:bg-slate-800 transition-colors whitespace-nowrap cursor-pointer shadow-2xs"
+                              >
+                                <Mail className="w-3.5 h-3.5" />
+                                Request Policy
+                              </button>
+                            )}
+                            {(user?.role === 'admin' || user?.role === 'moderator') && (
+                              <div className="flex items-center gap-1 pl-1">
+                                <button 
+                                  onClick={() => {
+                                    setEditingPolicyId(policy.id);
+                                    setEditPolicyState({
+                                      name: policy.name,
+                                      description: policy.description,
+                                      is_requestable: policy.is_requestable,
+                                      effective_date: policy.effective_date || '',
+                                      version: policy.version || ''
+                                    });
+                                  }}
+                                  className="text-slate-400 hover:text-blue-600 transition-colors p-1.5 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                                  aria-label={`Edit ${policy.name}`}
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                                <button 
+                                  onClick={() => handleDeletePolicy(policy.id)}
+                                  className="text-slate-400 hover:text-red-600 transition-colors p-1.5 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 cursor-pointer"
+                                  aria-label={`Delete ${policy.name}`}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       )}
                     </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-xs font-medium text-slate-700 mb-1">Effective Date</label>
-                      <input 
-                        type="date" 
-                        value={newDoc.effective_date || ''}
-                        onChange={(e) => setNewDoc({...newDoc, effective_date: e.target.value})}
-                        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  ))}
+
+                  {/* Admin Add Policy */}
+                  {(user?.role === 'admin' || user?.role === 'moderator') && (
+                    <div className="bg-slate-50 p-5 rounded-xl border border-dashed border-slate-300 flex flex-col gap-3 mt-2">
+                      <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                        <Plus className="w-4 h-4" /> Add Policy
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <input 
+                          type="text" 
+                          placeholder="Policy Name (e.g. Information Security Policy)"
+                          value={newPolicy.name}
+                          onChange={(e) => setNewPolicy({...newPolicy, name: e.target.value})}
+                          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
+                        />
+                        <input 
+                          type="date" 
+                          value={newPolicy.effective_date}
+                          onChange={(e) => setNewPolicy({...newPolicy, effective_date: e.target.value})}
+                          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
+                          placeholder="Effective Date"
+                        />
+                        <input 
+                          type="text" 
+                          value={newPolicy.version}
+                          onChange={(e) => setNewPolicy({...newPolicy, version: e.target.value})}
+                          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
+                          placeholder="Version (e.g. 1.0)"
+                        />
+                      </div>
+                      <textarea 
+                        placeholder="Description (optional)"
+                        value={newPolicy.description}
+                        onChange={(e) => setNewPolicy({...newPolicy, description: e.target.value})}
+                        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 resize-none h-16"
                       />
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+                        <div className="flex items-center gap-2">
+                          <input 
+                            type="checkbox" 
+                            id="policy-requestable"
+                            checked={newPolicy.is_requestable === 1}
+                            onChange={(e) => setNewPolicy({...newPolicy, is_requestable: e.target.checked ? 1 : 0})}
+                            className="rounded border-slate-300 text-slate-900 focus:ring-slate-900"
+                          />
+                          <label htmlFor="policy-requestable" className="text-sm font-medium text-slate-700">
+                            Allow users to request this policy
+                          </label>
+                        </div>
+                        <Button onClick={handleAddPolicy} size="sm" className="sm:w-auto w-full">Add to List</Button>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-700 mb-1">Version</label>
-                      <input 
-                        type="text" 
-                        placeholder="v1.0"
-                        value={newDoc.version || ''}
-                        onChange={(e) => setNewDoc({...newDoc, version: e.target.value})}
-                        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
-                      />
-                    </div>
-                  </div>
+                  )}
                 </div>
 
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-                  <div className="flex items-center gap-2">
-                    <input 
-                      type="checkbox" 
-                      id="custom-current-bottom"
-                      checked={newDoc.is_current === 1}
-                      onChange={(e) => setNewDoc({...newDoc, is_current: e.target.checked ? 1 : 0})}
-                      className="rounded border-slate-300 text-slate-900 focus:ring-slate-900"
-                    />
-                    <label htmlFor="custom-current-bottom" className="text-sm font-medium text-slate-700">
-                      Set as current active version
-                    </label>
+                {policies.length === 0 && !(user?.role === 'admin' || user?.role === 'moderator') && (
+                  <div className="text-center py-8 text-slate-500">
+                    No policies available for this product.
                   </div>
-                  <Button 
-                    onClick={() => handleSaveDoc(customSectionTitle)} 
-                    disabled={!customSectionTitle.trim() || (!newDoc.url && !newDoc.file_url)}
-                    size="sm" 
-                    className="sm:w-auto w-full"
-                  >
-                    Add Custom Document
-                  </Button>
-                </div>
+                )}
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
         </div>

@@ -4,6 +4,7 @@ type User = {
   id: number;
   username: string;
   role: 'admin' | 'moderator' | 'viewer';
+  job_role?: string;
   allowedModules?: string[];
   allowedProducts?: string[];
   token?: string;

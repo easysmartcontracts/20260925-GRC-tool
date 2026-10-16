@@ -125,7 +125,7 @@ export function AdminKPI() {
           <!DOCTYPE html>
           <html>
             <head>
-              <title>Björn Lunden - Executive KPI Report</title>
+              <title>Bjorn Lunden - Executive KPI Report</title>
               <style>
                 @page { size: A4 portrait; margin: 12mm; }
                 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #0f172a; margin: 0; padding: 10px; font-size: 10pt; line-height: 1.4; background: #fff; }
@@ -350,7 +350,7 @@ export function AdminKPI() {
     topPurpose: Object.entries(data.purposes).sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A'
   })).sort((a, b) => b.count - a.count);
 
-  // 2. Relationship to Björn Lunden Aggregation
+  // 2. Relationship to Bjorn Lunden Aggregation
   const relationshipMap: Record<string, { 
     count: number; 
     titles: Record<string, number>; 
@@ -525,7 +525,7 @@ export function AdminKPI() {
             </h1>
           </div>
           <p className="text-slate-500 mt-1 max-w-2xl text-sm">
-            Comprehensive analytics on document access, verified requester job titles, stakeholder relationships with Björn Lunden, and compliance evaluation purposes.
+            Comprehensive analytics on document access, verified requester job titles, stakeholder relationships with Bjorn Lunden, and compliance evaluation purposes.
           </p>
         </div>
         <div className="flex items-center gap-2.5 print:hidden">
@@ -631,7 +631,7 @@ export function AdminKPI() {
               </Badge>
             </div>
             <p className="text-xs sm:text-sm text-slate-500 mt-1">
-              Active monitoring of job titles requesting sensitive documentation, their verified relationship with Björn Lunden, and declared evaluation purposes.
+              Active monitoring of job titles requesting sensitive documentation, their verified relationship with Bjorn Lunden, and declared evaluation purposes.
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs font-medium text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
@@ -772,13 +772,13 @@ export function AdminKPI() {
             </CardContent>
           </Card>
 
-          {/* Pillar 2: Relationship to Björn Lunden Breakdown */}
+          {/* Pillar 2: Relationship to Bjorn Lunden Breakdown */}
           <Card className="border-slate-200/90 shadow-sm flex flex-col">
             <CardHeader className="py-4 px-5 border-b border-slate-100 bg-slate-50/60">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
                   <Users className="w-4 h-4 text-emerald-600" />
-                  Relationship to Björn Lunden
+                  Relationship to Bjorn Lunden
                 </CardTitle>
                 <span className="text-xs font-semibold px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-md">
                   {relationshipStats.length} Segments
@@ -890,7 +890,7 @@ export function AdminKPI() {
                   Stakeholder Cross-Analysis Matrix
                 </CardTitle>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Clear overview cross-referencing Job Titles with their dominant Relationships to Björn Lunden and stated Purposes.
+                  Clear overview cross-referencing Job Titles with their dominant Relationships to Bjorn Lunden and stated Purposes.
                 </p>
               </div>
               <span className="text-xs text-slate-500 font-medium">
@@ -904,7 +904,7 @@ export function AdminKPI() {
                 <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs uppercase font-semibold">
                   <tr>
                     <th className="px-5 py-3.5">Job Title &amp; Professional Role</th>
-                    <th className="px-5 py-3.5">Relationship with Björn Lunden</th>
+                    <th className="px-5 py-3.5">Relationship with Bjorn Lunden</th>
                     <th className="px-5 py-3.5">Primary Purpose of Request</th>
                     <th className="px-5 py-3.5 text-center">Requests</th>
                     <th className="px-5 py-3.5 text-right">Organizations</th>
@@ -1026,7 +1026,7 @@ export function AdminKPI() {
                   <tr>
                     <th className="px-5 py-3.5">Requester &amp; Company</th>
                     <th className="px-5 py-3.5">Job Title</th>
-                    <th className="px-5 py-3.5">Relationship to Björn Lunden</th>
+                    <th className="px-5 py-3.5">Relationship to Bjorn Lunden</th>
                     <th className="px-5 py-3.5">Purpose of Request</th>
                     <th className="px-5 py-3.5">Document Requested</th>
                     <th className="px-5 py-3.5">Timestamp</th>
@@ -1483,7 +1483,7 @@ export function AdminKPI() {
                 <div>
                   <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                     <Users className="w-3.5 h-3.5 text-emerald-600" />
-                    2. Relationships to Björn Lunden
+                    2. Relationships to Bjorn Lunden
                   </h4>
                   <table className="w-full text-xs text-left border border-slate-200">
                     <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">

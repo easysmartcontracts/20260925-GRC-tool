@@ -148,7 +148,7 @@ router.use(requireAdminOrMod);
 
 // Get all users
 router.get('/users', async (req: any, res) => {
-  const [users]: any = await pool.query('SELECT id, username, role FROM users');
+  const [users]: any = await pool.query('SELECT id, username, role, job_role FROM users');
   
   const viewerIds = users.filter((u: any) => u.role === 'viewer').map((u: any) => u.id);
   
@@ -182,7 +182,7 @@ router.get('/users', async (req: any, res) => {
 
 // Create a user
 router.post('/users', async (req: any, res) => {
-  const { username, password, role } = req.body;
+  const { username, password, role, job_role } = req.body;
   if (!username || !password || !role) return res.status(400).json({ error: 'Missing fields' });
 
   // Password validation: at least 12 chars, 1 uppercase, 1 number, 1 special character
@@ -200,13 +200,41 @@ router.post('/users', async (req: any, res) => {
 
   try {
     const hash = bcrypt.hashSync(password, 10);
-    const [info]: any = await pool.query('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)', [username, hash, role]);
-    res.json({ id: info.insertId, username, role });
+    const jobRoleVal = typeof job_role === 'string' ? job_role.trim() : '';
+    const [info]: any = await pool.query('INSERT INTO users (username, password_hash, role, job_role) VALUES (?, ?, ?, ?)', [username, hash, role, jobRoleVal]);
+    res.json({ id: info.insertId, username, role, job_role: jobRoleVal });
   } catch (err: any) {
     if (err.code === 'SQLITE_CONSTRAINT') {
       return res.status(400).json({ error: 'Username already exists' });
     }
     res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Update a user (job role and/or role permissions level)
+router.put('/users/:id', async (req: any, res) => {
+  const id = req.params.id;
+  const { role, job_role } = req.body;
+
+  const [targetUserRows]: any = await pool.query('SELECT role, job_role FROM users WHERE id = ?', [id]);
+  const targetUser = targetUserRows[0];
+  if (!targetUser) return res.status(404).json({ error: 'User not found' });
+
+  let newRole = targetUser.role;
+  if (role) {
+    if (req.user.role !== 'admin' && (role === 'admin' || role === 'moderator' || targetUser.role === 'admin')) {
+      return res.status(403).json({ error: 'Only administrators can change administrative roles' });
+    }
+    newRole = role;
+  }
+
+  const newJobRole = typeof job_role === 'string' ? job_role.trim() : (targetUser.job_role || '');
+
+  try {
+    await pool.query('UPDATE users SET role = ?, job_role = ? WHERE id = ?', [newRole, newJobRole, id]);
+    res.json({ success: true, id, role: newRole, job_role: newJobRole });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to update user' });
   }
 });
 

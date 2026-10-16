@@ -48,7 +48,7 @@ export function Breadcrumbs() {
     // 1. Home / Root Dashboard
     if (pathname === '/' || pathname === '') {
       return [
-        { label: 'Trust Center', path: '/', isHome: true, isCurrent: true }
+        { label: 'Software Overview', path: '/', isHome: true, isCurrent: true }
       ];
     }
 
@@ -123,49 +123,35 @@ export function Breadcrumbs() {
     }
 
     // 7. Security Category
-    if (pathname.startsWith('/security-overview')) {
+    if (pathname.startsWith('/security-features') || pathname.startsWith('/security-overview')) {
+      const baseSecurityPath = pathname.startsWith('/security-features') ? '/security-features' : '/security-overview';
       const slug = pathname.split('/')[2];
       if (slug) {
         return [
           { label: 'Home', path: '/', isHome: true },
-          { label: 'Security Overview', path: '/security-overview' },
+          { label: 'Security features', path: baseSecurityPath },
           { label: formatSlug(slug), path: pathname, isCurrent: true }
         ];
       }
       return [
         { label: 'Home', path: '/', isHome: true },
-        { label: 'Security Overview', path: '/security-overview', isCurrent: true }
+        { label: 'Security features', path: baseSecurityPath, isCurrent: true }
       ];
     }
 
-    if (pathname.startsWith('/controls')) {
-      const slug = pathname.split('/')[2];
-      if (slug) {
-        return [
-          { label: 'Home', path: '/', isHome: true },
-          { label: 'Controls', path: '/controls' },
-          { label: formatSlug(slug), path: pathname, isCurrent: true }
-        ];
-      }
-      return [
-        { label: 'Home', path: '/', isHome: true },
-        { label: 'Controls', path: '/controls', isCurrent: true }
-      ];
-    }
-
-    // 8. Compliance Category
+    // 8. Compliance / Certifications Category
     if (pathname.startsWith('/certifications')) {
       const slug = pathname.split('/')[2];
       if (slug) {
         return [
           { label: 'Home', path: '/', isHome: true },
-          { label: 'Certifications & Reports', path: '/certifications' },
+          { label: 'Certifications', path: '/certifications' },
           { label: formatSlug(slug), path: pathname, isCurrent: true }
         ];
       }
       return [
         { label: 'Home', path: '/', isHome: true },
-        { label: 'Certifications & Reports', path: '/certifications', isCurrent: true }
+        { label: 'Certifications', path: '/certifications', isCurrent: true }
       ];
     }
 

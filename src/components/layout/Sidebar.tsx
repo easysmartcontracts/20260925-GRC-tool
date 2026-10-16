@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { LayoutDashboard, ShieldCheck, FileCheck, Lock, FileText, Settings, Package, ExternalLink } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { getLastSelectedProduct } from '../../utils/productSelection';
 import { fetchPublicProducts } from '../../utils/api';
@@ -32,57 +31,40 @@ export function Sidebar({ isOpen, onClose, activeSection }: SidebarProps) {
     });
   }, []);
 
-  const navGroups = [
-    {
-      title: 'Overview',
-      items: [
-        { id: 'dashboard', label: 'Dashboard', path: '/' },
-      ]
+  const navItems = [
+    { 
+      id: 'dashboard', 
+      label: 'SOFTWARE OVERVIEW', 
+      path: '/' 
     },
-    {
-      title: 'Products',
-      items: products.map(p => ({
-        id: `product-${p.slug}`,
-        label: p.name,
-        path: `/product/${p.slug}`
-      }))
+    { 
+      id: 'security-overview', 
+      label: 'SECURITY FEATURES', 
+      path: lastSelected ? `/security-features/${lastSelected}` : '/security-features' 
     },
-    {
-      title: 'Security',
-      items: [
-        { id: 'security-overview', label: 'Security Overview', path: lastSelected ? `/security-overview/${lastSelected}` : '/security-overview' },
-        { id: 'controls', label: 'Controls', path: lastSelected ? `/controls/${lastSelected}` : '/controls' },
-      ]
+    { 
+      id: 'certifications', 
+      label: 'CERTIFICATIONS', 
+      path: lastSelected ? `/certifications/${lastSelected}` : '/certifications' 
     },
-    {
-      title: 'Compliance',
-      items: [
-        { id: 'certifications', label: 'Certifications and Reports', path: lastSelected ? `/certifications/${lastSelected}` : '/certifications' },
-        { id: 'policies', label: 'Policies', path: lastSelected ? `/policies/${lastSelected}` : '/policies' },
-      ]
+    { 
+      id: 'legal', 
+      label: 'LEGAL DOCUMENTS', 
+      path: lastSelected ? `/legal/${lastSelected}` : '/legal' 
     },
-    {
-      title: 'Legal',
-      items: [
-        { id: 'legal', label: 'Legal Documents', path: lastSelected ? `/legal/${lastSelected}` : '/legal' },
-        { id: 'subprocessors', label: 'Subprocessors', path: lastSelected ? `/subprocessors/${lastSelected}` : '/subprocessors' },
-      ]
-    }
+    { 
+      id: 'subprocessors', 
+      label: 'SUBPROCESSORS', 
+      path: lastSelected ? `/subprocessors/${lastSelected}` : '/subprocessors' 
+    },
   ];
 
-  const filterItems = (items: { id: string, label: string, path: string }[]) => {
-    return items.filter(item => {
-      if (user?.role === 'admin' || user?.role === 'moderator') return true;
-      if (publicPages.includes(item.id)) return true;
-      if (user?.role === 'viewer' && user.allowedModules?.includes(item.id)) return true;
-      return false;
-    });
-  };
-
-  const filteredGroups = navGroups.map(group => ({
-    ...group,
-    items: filterItems(group.items)
-  })).filter(group => group.items.length > 0);
+  const visibleItems = navItems.filter(item => {
+    if (user?.role === 'admin' || user?.role === 'moderator') return true;
+    if (publicPages.includes(item.id)) return true;
+    if (user?.role === 'viewer' && user.allowedModules?.includes(item.id)) return true;
+    return false;
+  });
 
   return (
     <>
@@ -100,52 +82,46 @@ export function Sidebar({ isOpen, onClose, activeSection }: SidebarProps) {
         overflow-y-auto transition-transform duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
-        <nav className="p-4 space-y-8" aria-label="Main Navigation">
+        <nav className="p-4 space-y-6" aria-label="Main Navigation">
           
-          {/* Main Navigation Groups */}
-          <div className="space-y-6">
-            {filteredGroups.map((group) => (
-              <div key={group.title}>
-                <h3 className="px-3 font-bold text-slate-700 uppercase tracking-wider mb-2">
-                  {group.title}
-                </h3>
-                <ul className="space-y-2">
-                  {group.items.map((item) => (
-                    <li key={item.id}>
-                      <Link
-                        to={item.path}
-                        onClick={onClose}
-                        aria-current={activeSection === item.id ? 'page' : undefined}
-                        className={`block px-3 py-2.5 rounded-md text-base font-medium transition-colors ${
-                          activeSection === item.id 
-                            ? 'bg-slate-200 text-slate-900' 
-                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                        }`}
-                      >
-                        {item.label}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
+          {/* Main Navigation Items - No category head titles */}
+          <ul className="space-y-1.5">
+            {visibleItems.map((item) => {
+              const isActive = activeSection === item.id || (item.id === 'legal' && activeSection === 'policies');
+              return (
+                <li key={item.id}>
+                  <Link
+                    to={item.path}
+                    onClick={onClose}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={`block px-3.5 py-2.5 rounded-lg text-sm font-semibold tracking-wide transition-colors ${
+                      isActive 
+                        ? 'bg-slate-200 text-slate-900 shadow-2xs' 
+                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    }`}
+                  >
+                    {item.label}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
 
           {/* Admin Section */}
           {(user?.role === 'admin' || user?.role === 'moderator') && (
-            <div aria-label="Administration">
-              <h3 className="px-3 font-bold text-slate-700 uppercase tracking-wider mb-2">
+            <div className="pt-4 border-t border-slate-200" aria-label="Administration">
+              <h3 className="px-3 font-bold text-slate-700 uppercase tracking-wider mb-2 text-xs">
                 Administration
               </h3>
-              <ul className="space-y-2">
+              <ul className="space-y-1.5">
                 <li>
                   <Link
                     to="/admin"
                     onClick={onClose}
                     aria-current={activeSection === 'admin' ? 'page' : undefined}
-                    className={`block px-3 py-2.5 rounded-md text-base font-medium transition-colors ${
+                    className={`block px-3.5 py-2 rounded-lg text-sm font-medium transition-colors ${
                       activeSection === 'admin' 
-                        ? 'bg-slate-200 text-slate-900' 
+                        ? 'bg-slate-200 text-slate-900 font-semibold' 
                         : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                     }`}
                   >
@@ -157,9 +133,9 @@ export function Sidebar({ isOpen, onClose, activeSection }: SidebarProps) {
                     to="/admin/kpi"
                     onClick={onClose}
                     aria-current={activeSection === 'admin-kpi' ? 'page' : undefined}
-                    className={`block px-3 py-2.5 rounded-md text-base font-medium transition-colors ${
+                    className={`block px-3.5 py-2 rounded-lg text-sm font-medium transition-colors ${
                       activeSection === 'admin-kpi' 
-                        ? 'bg-slate-200 text-slate-900' 
+                        ? 'bg-slate-200 text-slate-900 font-semibold' 
                         : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                     }`}
                   >

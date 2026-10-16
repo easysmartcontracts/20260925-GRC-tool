@@ -95,7 +95,7 @@ router.post('/login', async (req, res) => {
     maxAge
   });
 
-  res.json({ id: user.id, username: user.username, role: user.role, token });
+  res.json({ id: user.id, username: user.username, role: user.role, job_role: user.job_role || '', token });
 });
 
 router.post('/logout', (req, res) => {
@@ -127,7 +127,7 @@ router.get('/me', async (req, res) => {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as any;
-    const [userRows]: any = await pool.query('SELECT id, username, role FROM users WHERE id = ?', [decoded.id]);
+    const [userRows]: any = await pool.query('SELECT id, username, role, job_role FROM users WHERE id = ?', [decoded.id]);
     const user = userRows[0];
     
     if (!user) return res.status(401).json({ error: 'User not found' });
